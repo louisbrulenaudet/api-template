@@ -137,7 +137,7 @@ shellingham==1.5.4
     # via typer
 starlette==0.52.1
     # via fastapi
-ty==0.0.24
+ty==0.0.26
     # via api-template
 typer==0.24.1
     # via fastapi-cli
