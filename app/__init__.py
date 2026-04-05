@@ -12,6 +12,6 @@ __all__ = [
 
 def get_app() -> FastAPI:
     """Return the FastAPI application lazily."""
-    from app.main import app
+    from app.main import app  # noqa: PLC0415
 
     return app

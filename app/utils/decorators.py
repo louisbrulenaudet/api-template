@@ -1,32 +1,31 @@
 import asyncio
-import random
+import secrets
 from collections.abc import Awaitable, Callable
 from time import sleep
 from typing import ParamSpec, TypeVar
 
 __all__ = [
-    "retry",
     "async_retry",
+    "retry",
 ]
 
 
 P = ParamSpec("P")
 R = TypeVar("R")
+_SECURE_RANDOM = secrets.SystemRandom()
 
 
-def _compute_retry_delay(sleep_time: int | float, attempt: int) -> float:
-    """
-    Compute an attempt-based backoff delay with jitter.
+def _compute_retry_delay(sleep_time: int | float, attempt: int, max_delay: float = 30.0) -> float:
+    """Compute an attempt-based backoff delay with jitter.
 
-    Full-jitter (uniform in [0, base_delay]) reduces thundering herd impact when many requests retry concurrently after the same downstream failure.
+    Full-jitter (uniform in [0, min(base_delay, max_delay)]) reduces thundering herd impact when many requests retry concurrently after the same downstream failure.
     """  # pragma: no cover
-    base_delay = float(sleep_time) * (2**attempt)
-    return random.uniform(0, base_delay)
+    base_delay = min(float(sleep_time) * (2**attempt), max_delay)
+    return _SECURE_RANDOM.uniform(0, base_delay)
 
 
 def _is_event_loop_running() -> bool:
-    """
-    Return True when called from within an active asyncio event loop.
+    """Return True when called from within an active asyncio event loop.
 
     This is used to prevent the sync retry decorator from performing blocking   sleeps inside async contexts.
     """  # pragma: no cover
@@ -44,9 +43,7 @@ def _should_raise(
     raises_on_exception: bool,
     non_retry_exceptions: tuple[type[Exception], ...],
 ) -> bool:
-    """
-    Return True when the caught exception should be re-raised.
-    """  # pragma: no cover
+    """Return True when the caught exception should be re-raised."""  # pragma: no cover
     if not raises_on_exception:
         return False
     return attempt == max_retries - 1 or (
@@ -60,8 +57,7 @@ def retry(
     raises_on_exception: bool = True,
     non_retry_exceptions: tuple[type[Exception], ...] = (),
 ) -> Callable[[Callable[P, R]], Callable[P, R | None]]:
-    """
-    Decorator to retry a function call on exception.
+    """Decorator to retry a function call on exception.
 
     Args:
         max_retries (int): Maximum number of retries before giving up.
@@ -77,20 +73,20 @@ def retry(
         def wrapper(*args: P.args, **kwargs: P.kwargs) -> R | None:
             if _is_event_loop_running():
                 raise RuntimeError(
-                    "retry() must not be used inside an async context. "
-                    "Use async_retry() instead."
+                    "retry() must not be used inside an async context. Use async_retry() instead."
                 )
             for i in range(max_retries):
                 try:
                     result = func(*args, **kwargs)
-                    return result
                 except Exception as e:
-                    if _should_raise(
-                        e, i, max_retries, raises_on_exception, non_retry_exceptions
-                    ):
-                        raise e
+                    if _should_raise(e, i, max_retries, raises_on_exception, non_retry_exceptions):
+                        raise
                     if sleep_time:
                         sleep(_compute_retry_delay(sleep_time, i))
+                else:
+                    return result
+
+            return None
 
         return wrapper
 
@@ -103,8 +99,7 @@ def async_retry(
     raises_on_exception: bool = True,
     non_retry_exceptions: tuple[type[Exception], ...] = (),
 ) -> Callable[[Callable[P, Awaitable[R]]], Callable[P, Awaitable[R | None]]]:
-    """
-    Async decorator to retry a coroutine function call on exception.
+    """Async decorator to retry a coroutine function call on exception.
 
     Args:
         max_retries (int): Maximum number of retries before giving up.
@@ -121,14 +116,15 @@ def async_retry(
             for i in range(max_retries):
                 try:
                     result = await func(*args, **kwargs)
-                    return result
                 except Exception as e:
-                    if _should_raise(
-                        e, i, max_retries, raises_on_exception, non_retry_exceptions
-                    ):
-                        raise e
+                    if _should_raise(e, i, max_retries, raises_on_exception, non_retry_exceptions):
+                        raise
                     if sleep_time:
                         await asyncio.sleep(_compute_retry_delay(sleep_time, i))
+                else:
+                    return result
+
+            return None
 
         return wrapper
 

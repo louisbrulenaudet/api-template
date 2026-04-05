@@ -140,7 +140,7 @@ Conduct a configuration-only review. Inspect the following and call out violatio
 - [ ] Secrets handling reviewed (`.env`, `.env.template`, `.gitignore`, `.dockerignore`, `compose.yaml`)
 - [ ] Dockerfile reviewed (uv sync frozen installs, runtime entrypoint, HEALTHCHECK)
 - [ ] Pydantic Settings contract reviewed (`app/core/config.py`)
-- [ ] Ruff configuration reviewed (`pyproject.toml`, `make check`, `make format`)
+- [ ] Ruff configuration reviewed (`pyproject.toml`, `make check`, `make format`, `make type-check`)
 - [ ] Build modes + reproducibility reviewed (`uv.lock`, `uv sync --frozen --no-dev`)
 - [ ] Middleware/Router/Error wiring reviewed (`app/main.py`)
 - [ ] Output structured as Critical / Improvements / Optional with what/where/why

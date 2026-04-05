@@ -1,68 +1,13 @@
-# Ignore Python cache and bytecode
-__pycache__/
-*.py[cod]
-*.pyo
-*.so
+# Allowlist approach: exclude everything by default, then re-include only what
+# the Dockerfile explicitly COPYs. Any file or directory added to the project
+# in the future is automatically kept out of the build context without further
+# changes to this file.
+*
 
-# Ignore virtual environments
-.venv/
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-.venv.bak/
+# builder stage — uv sync --frozen --no-dev
+!pyproject.toml
+!uv.lock
 
-# Ignore distribution/build artifacts
-build/
-dist/
-*.egg-info/
-.eggs/
-*.egg
-*.whl
-wheels/
-share/python-wheels/
-
-# Secrets / environment files (avoid leaking into images)
-.env
-.env.*
-.env.template
-
-# Ignore version control
-.git/
-.gitignore
-
-# Ignore OS files
-.DS_Store
-
-# Ignore test and coverage files
-tests/
-.coverage
-.pytest_cache/
-.ruff_cache/
-
-# Ignore editor/project files
-.vscode/
-.idea/
-.cursor/
-.cursorignore
-.cursorindexingignore
-
-# Ignore docs and licenses
-README.md
-AGENTS.md
-LICENSE
-*.md
-
-# Ignore dev/ci and tooling (not needed in the runtime image)
-Makefile
-make/
-compose.yaml
-.github/
-.pre-commit-config.yaml
-
-# Ignore logs
-*.log
-
-# Dependencies not used by Docker build
-requirements.txt
+# runtime stage — application source
+!app/
+!app/**

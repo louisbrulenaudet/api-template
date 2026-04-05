@@ -1,6 +1,6 @@
-.PHONY: check-docker build rebuild start stop restart logs clean run-dev run-dev-tunnel tunnel-logs tunnel-stop
+.PHONY: check-docker docker-build docker-rebuild docker-start docker-stop docker-restart docker-logs docker-clean docker-run-dev docker-run-dev-tunnel docker-tunnel-logs docker-tunnel-stop docker-deploy-prod docker-logs-prod
 
-make check-docker: ## Verify Docker installation and configuration
+docker-check: ## Verify Docker installation and configuration
 	@if ! command -v docker >/dev/null 2>&1; then \
 		echo "❌ Docker is not installed! Please install it first."; \
 		exit 1; \
@@ -11,48 +11,48 @@ make check-docker: ## Verify Docker installation and configuration
 		echo "✅ Docker and Docker Compose are installed"; \
 	fi
 
-build: ## Create application containers
+docker-build: ## Create application containers
 	@echo "🔨 Building application containers..."
 	docker compose build
 
-rebuild: ## Rebuild containers with fresh configuration
+docker-rebuild: ## Rebuild containers with fresh configuration
 	@echo "🔨 Performing complete rebuild..."
 	docker compose down --volumes --remove-orphans
 	docker compose build --no-cache
 	docker compose up -d
 
-start: ## Launch application services
+docker-start: ## Launch application services
 	@echo "🚀 Starting application services..."
 	docker compose up -d
 
-stop: ## Stop all running services
+docker-stop: ## Stop all running services
 	@echo "🛑 Stopping application services..."
 	docker compose down
 
-restart: ## Restart all application services
+docker-restart: ## Restart all application services
 	@echo "🔄 Restarting services..."
 	docker compose down && docker compose up -d
 
-logs: ## Display container logs
+docker-logs: ## Display container logs
 	@echo "📜 Showing application logs..."
 	docker compose logs -f
 
-clean: ## Remove all containers and volumes
+docker-clean: ## Remove all containers and volumes
 	@echo "🧹 Cleaning up resources..."
 	docker compose down --volumes --remove-orphans
 
-run-dev: ## Start development server with live reload
+docker-run-dev: ## Start development server with live reload
 	@echo "🚀 Starting development server..."
 	docker compose up -d app
 
-run-dev-tunnel: ## Start dev server with Cloudflare Tunnel (opt-in via profile)
+docker-run-dev-tunnel: ## Start dev server with Cloudflare Tunnel (opt-in via profile)
 	@echo "🌐 Starting dev server + Cloudflare Tunnel..."
 	docker compose --profile tunnel up -d app cloudflared
 
-tunnel-logs: ## Follow Cloudflare Tunnel logs
+docker-tunnel-logs: ## Follow Cloudflare Tunnel logs
 	@echo "📜 Following Cloudflare Tunnel logs..."
 	docker compose logs -f cloudflared
 
-tunnel-stop: ## Stop tunnel (does not remove app files)
+docker-tunnel-stop: ## Stop tunnel (does not remove app files)
 	@echo "🛑 Stopping Cloudflare Tunnel..."
 	docker compose stop cloudflared

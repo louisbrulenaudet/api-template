@@ -1,23 +1,34 @@
 import time
+from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
 from app.core.config import Settings, get_settings
-from app.dtos.models import HealthResponse, PingResponse
+from app.dtos import HealthResponse, PingResponse
 
-router = APIRouter(tags=["health"])
+router = APIRouter()
 
 
 @router.get(
     "/ping",
-    response_model=PingResponse,
     tags=["Health"],
     summary="Ping endpoint",
     description="Health check endpoint for readiness/liveness probes.",
 )
-async def ping(settings: Settings = Depends(get_settings)) -> PingResponse:
-    """
-    Health check endpoint for readiness/liveness probes.
+async def ping(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> PingResponse:
+    """Health check endpoint for readiness/liveness probes.
+
+    Args:
+        settings: The application settings.
+
+    Returns:
+        PingResponse: A structured ping response payload.
+
+    Example:
+        >>> await ping()
+        {'status': 'ok', 'uptime': 100, 'timestamp': 1716806400}
     """
     now: int = int(time.time())
     uptime: int = now - int(settings.service_start_time)
@@ -31,14 +42,12 @@ async def ping(settings: Settings = Depends(get_settings)) -> PingResponse:
 
 @router.get(
     "/health",
-    response_model=HealthResponse,
     tags=["Health"],
     summary="Health check endpoint",
     description="Lightweight healthcheck endpoint for Docker/K8s.",
 )
 async def health() -> HealthResponse:
-    """
-    Lightweight healthcheck endpoint for Docker/K8s.
+    """Lightweight healthcheck endpoint for Docker/K8s.
 
     Returns:
         HealthResponse: A structured health status payload.

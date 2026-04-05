@@ -1,21 +1,20 @@
 services:
   app:
-    # API container for local development (Dockerfile target `reload`: hot reload, same deps as `runtime`)
-    # - Loads configuration from `.env` (do not commit secrets)
-    # - Hot-reloads using the mounted `./app` volume
-    container_name: backend
+    # API container for local development (Dockerfile target `reload`: hot reload, same deps as `runtime`).
+    # - Loads configuration from `.env` (do not commit secrets).
+    # - Hot-reloads using the mounted `./app` volume.
     build:
       context: .
       dockerfile: Dockerfile
       target: reload
     working_dir: /app
-    # Start the FastAPI app in development mode
-    command: ["fastapi", "dev", "app/main.py", "--host", "0.0.0.0", "--port", "8001", "--reload"]
+    command: ["fastapi", "dev", "app/main.py", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     ports:
-      # Expose container port 8001 on the host
-      - "8001:8001"
+      # Bind to loopback only — prevents accidental exposure on all interfaces,
+      # which would bypass host firewall rules (e.g. UFW).
+      - "127.0.0.1:8000:8000"
     env_file:
-      # Provide runtime secrets/config (this is independent from `.dockerignore`)
+      # Provide runtime secrets/config (independent from `.dockerignore`).
       - .env
     environment:
       LOGFIRE_SEND_TO_LOGFIRE: "false"
@@ -28,8 +27,42 @@ services:
     #   APP_NAME: "Backend"
     #   API_KEY: "your_api_key_here"
     #   API_CLIENT: "your_client_id_here"
+    # Root filesystem is read-only; the source volume and /tmp are the only writable paths.
+    read_only: true
+    tmpfs:
+      # Writable scratch space for stdlib tempfile, uvicorn, etc. Maximum size 64MB.
+      - /tmp:size=64m,mode=1777
+
+    # Drop every capability, then add back only what is explicitly required.
+    # A plain FastAPI/uvicorn process needs none of the default set.
+    cap_drop:
+      - ALL
+
+    security_opt:
+      # Prevents privilege escalation via setuid/setgid binaries inside the container.
+      - no-new-privileges:true
+
+    # Limits the number of processes/threads; mitigates fork-bomb style attacks.
+    pids_limit: 256
+
+    # Prevents unbounded log growth from exhausting host disk space.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Docker Compose waits for healthy status before marking the service as up.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys,urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health',timeout=3); sys.exit(0 if r.status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
     volumes:
-      # Mount source for live reload (host -> container)
+      # Mount source for live reload (host -> container).
+      # Docker volume mounts override the read-only rootfs for their target path.
       - ./app:/app/app
     restart: unless-stopped
     networks:
@@ -44,7 +77,7 @@ services:
     restart: unless-stopped
     # The tunnel token identifies the tunnel configuration created in Cloudflare.
     # We also pass the local URL so the tunnel knows where to forward traffic.
-    command: tunnel --no-autoupdate run --url http://app:8001
+    command: tunnel --no-autoupdate run --url http://app:8000
     dns:
       - 1.1.1.1
       - 8.8.8.8
