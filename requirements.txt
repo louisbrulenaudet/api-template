@@ -135,7 +135,7 @@ ruff==0.15.7
     # via api-template
 shellingham==1.5.4
     # via typer
-starlette==0.52.1
+starlette==1.0.0
     # via fastapi
 ty==0.0.24
     # via api-template
