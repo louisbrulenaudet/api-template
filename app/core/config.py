@@ -1,7 +1,7 @@
 import time
+import tomllib
 from functools import lru_cache
-from importlib.metadata import PackageNotFoundError
-from importlib.metadata import version as importlib_version
+from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings
@@ -14,19 +14,14 @@ __all__ = [
 
 
 def _get_package_version() -> str:
-    """
-    Return the installed distribution version from package metadata (see `pyproject.toml`).
-    """
-    try:
-        return importlib_version("backend")
-    except PackageNotFoundError:
-        return "0.0.0"
+    """Return the version from pyproject.toml."""
+    pyproject = Path(__file__).parent.parent.parent / "pyproject.toml"
+    with pyproject.open("rb") as f:
+        return tomllib.load(f)["project"]["version"]
 
 
 class Settings(BaseSettings):
-    """
-    Configuration settings for the application, using Pydantic for validation.
-    """
+    """Configuration settings for the application, validated by Pydantic."""
 
     name: str = Field(default="Backend", alias="APP_NAME")
     version: str = Field(default_factory=_get_package_version)
@@ -40,9 +35,5 @@ class Settings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """
-    Return the cached application settings. Use with FastAPI Depends() for testability.
-    """
-    settings = Settings()
-
-    return settings
+    """Return the cached application settings for `Depends(get_settings)`."""
+    return Settings()

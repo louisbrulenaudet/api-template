@@ -30,22 +30,25 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.13"
+          python-version: "3.14"
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v7
         with:
-          version: "0.10.12"
+          version: "0.11.3"
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --locked --extra dev
+        run: uv sync --locked
 
       - name: Run lint with ruff
-        run: uv run ruff check .
+        run: uv run --locked ruff check .
+
+      - name: Run type check with ty
+        run: uv run --locked ty check .
 
       - name: Run tests with pytest
-        run: uv run pytest -q
+        run: uv run --locked pytest -q
 
   docker-build:
     name: Build runtime image

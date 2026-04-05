@@ -4,12 +4,12 @@ from pydantic import BaseModel, ConfigDict, Field
 
 __all__ = [
     "PingResponse",
-    "HealthResponse",
 ]
 
 
 class PingResponse(BaseModel):
-    model_config = ConfigDict(frozen=True, title="PingResponse")
+    model_config = ConfigDict(frozen=True, extra="forbid", str_strip_whitespace=True)
+
     status: Literal["ok"] = Field(
         default="ok",
         description="The status of the health check.",
@@ -23,12 +23,4 @@ class PingResponse(BaseModel):
     timestamp: int = Field(
         default=0,
         description="The current timestamp when the health check was performed.",
-    )
-
-
-class HealthResponse(BaseModel):
-    model_config = ConfigDict(frozen=True, title="HealthResponse")
-    status: Literal["ok"] = Field(
-        default="ok",
-        description="The health status of the service.",
     )

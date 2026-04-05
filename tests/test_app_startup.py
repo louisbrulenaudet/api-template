@@ -8,16 +8,16 @@ from app.core.config import get_settings
 from app.enums.error_codes import ErrorCodes
 
 
-def test_force_https_registers_https_redirect_middleware(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_force_https_registers_https_redirect_middleware(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Cover `FORCE_HTTPS` branch in `app.main` (HTTPS redirect middleware)."""
     monkeypatch.setenv("FORCE_HTTPS", "true")
 
     get_settings.cache_clear()
     importlib.reload(main_module)
     try:
-        assert any(
-            m.cls == HTTPSRedirectMiddleware for m in main_module.app.user_middleware
-        )
+        assert any(m.cls == HTTPSRedirectMiddleware for m in main_module.app.user_middleware)
     finally:
         monkeypatch.delenv("FORCE_HTTPS", raising=False)
         get_settings.cache_clear()

@@ -10,8 +10,7 @@ __all__ = [
 
 
 class CoreError(Exception):
-    """
-    A custom exception class for handling application-specific errors.
+    """A custom exception class for handling application-specific errors.
 
     This exception includes an error message, an error code, and optional details.
 
@@ -33,8 +32,7 @@ class CoreError(Exception):
         code: ErrorCodes,
         details: dict[str, Any] | str | None = None,
     ) -> None:
-        """
-        Initialize a CoreError instance with an error message, code, and optional details.
+        """Initialize a CoreError instance with an error message, code, and optional details.
 
         The error is logged automatically when an instance is created.
 
@@ -49,8 +47,7 @@ class CoreError(Exception):
         self.details = details
 
     def __str__(self) -> str:
-        """
-        Return a string representation of the error, including the message, code, and optional details.
+        """Return a string representation of the error, including the message, code, and optional details.
 
         Returns:
             str: A formatted string describing the error.
@@ -64,8 +61,7 @@ class CoreError(Exception):
         return f"{self.__class__.__name__}: {self.message} [Code: {self.code}]{detail_part}"
 
     def to_dict(self) -> dict[str, Any]:
-        """
-        Convert the CoreError instance into a dictionary format.
+        """Convert the CoreError instance into a dictionary format.
 
         This is useful for structured logging or returning errors in API responses.
 
@@ -73,7 +69,11 @@ class CoreError(Exception):
             dict[str, Any]: A dictionary containing error details.
 
         Example:
-            >>> error = CoreError("Access denied", ErrorCodes.PERMISSION_DENIED, "User lacks admin rights")
+            >>> error = CoreError(
+            ...     "Access denied",
+            ...     ErrorCodes.PERMISSION_DENIED,
+            ...     "User lacks admin rights",
+            ... )
             >>> error.to_dict()
             {
                 "error": "CoreError",

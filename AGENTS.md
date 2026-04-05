@@ -6,7 +6,7 @@ This repository is a minimal, production-ready **FastAPI** template: strict **Py
 
 ## Tech Stack
 
-- **Language:** Python 3.13+ (strict type hints)
+- **Language:** Python 3.14+ (strict type hints)
 - **Framework:** FastAPI (async web framework)
 - **Validation:** Pydantic v2 (data validation and settings management)
 - **HTTP Client:** httpx (async HTTP client)
@@ -92,11 +92,14 @@ The application uses Pydantic Settings for configuration management. Required en
 
 3. **Development:**
 
+   Local `make dev` and the dev stack in [`compose.yaml`](compose.yaml) both use port **8000** on the host by default (`DEV_PORT` in [`make/variables.mk`](make/variables.mk) for local runs).
+
    ```sh
    make dev
+   # or: docker compose up --build / make docker-run-dev
    ```
 
-   - The API will be available at [http://localhost:8000](http://localhost:8000)
+   - The API will be available at [http://localhost:8000](http://localhost:8000) (Compose: [http://127.0.0.1:8000](http://127.0.0.1:8000) on the host)
    - Ping endpoint: [http://localhost:8000/api/v1/ping](http://localhost:8000/api/v1/ping)
 
 4. **Production:**
@@ -122,8 +125,10 @@ The following Makefile commands are available for development, formatting, testi
 | `make sync`            | Sync `.venv` from `uv.lock` (includes `dev` extra; same idea as CI) |
 | `make sync-all`        | Sync with all optional extras from `pyproject.toml` |
 | `make install`         | Alias for `make sync`                      |
+| `make lock`            | Lock project dependencies                   |
 | `make update`         | Update project dependencies (`uv lock --upgrade` + sync) |
 | `make clean-venv`      | Remove local `.venv` only                  |
+| `make type-check`      | Type check the source code using Ty         |
 | `make check`           | Run code quality checks (Ruff linting)      |
 | `make format`          | Format the codebase using Ruff              |
 | `make pre-commit`      | Run pre-commit checks on all files          |
@@ -132,15 +137,20 @@ The following Makefile commands are available for development, formatting, testi
 
 | Command                | Description                                  |
 |------------------------|----------------------------------------------|
-| `make build`           | Create application containers                |
-| `make rebuild`         | Rebuild containers with fresh configuration  |
-| `make start`           | Launch application services                  |
-| `make stop`            | Stop all running services                    |
-| `make restart`         | Restart all application services             |
-| `make logs`            | Display container logs                       |
-| `make clean`           | Remove all containers and volumes            |
-| `make run-dev`         | Start development server with live reload    |
-| `make check-docker`    | Verify Docker installation and configuration |
+| `make docker-check`    | Verify Docker installation and configuration |
+| `make docker-build`    | Create application containers                |
+| `make docker-rebuild`  | Rebuild containers with fresh configuration  |
+| `make docker-start`    | Launch application services                  |
+| `make docker-stop`     | Stop all running services                    |
+| `make docker-restart`  | Restart all application services             |
+| `make docker-logs`     | Display container logs                       |
+| `make docker-clean`    | Remove all containers and volumes            |
+| `make docker-run-dev`  | Start development server with live reload    |
+| `make docker-deploy-prod`     | Build and run production stack (`compose.prod.yml`; supports `APP_HOST_PORT`, `UVICORN_WORKERS`) |
+| `make docker-logs-prod`       | Follow logs for the production `app` service |
+| `make docker-run-dev-tunnel`  | Start dev server with Cloudflare Tunnel (opt-in)       |
+| `make docker-tunnel-logs`     | Follow Cloudflare Tunnel logs                |
+| `make docker-tunnel-stop`     | Stop Cloudflare Tunnel (keeps app)           |
 
 ## Middleware Stack
 
@@ -300,7 +310,7 @@ async def async_fetch_data():
 
 ## Coding Conventions
 
-- Use **strict Python 3.13+** with comprehensive type hints
+- Use **strict Python 3.14+** with comprehensive type hints
 - **Variables:** Use `snake_case` for all variables and functions (e.g., `account_id`, `get_account()`)
 - **Classes:** Use `PascalCase` for class names (e.g., `CoreError`, `PingResponse`)
 - **Constants:** Use `UPPER_SNAKE_CASE` for constants (e.g., `API_KEY`, `MAX_RETRIES`)
@@ -341,6 +351,10 @@ async def async_fetch_data():
 - **GET `/api/v1/health`**
   - Lightweight healthcheck for Docker/K8s
   - Returns: `{"status": "ok"}`
+
+## Docker build context
+
+The [`.dockerignore`](.dockerignore) uses an **allowlist** strategy: everything is excluded by default (`*`) and only the three paths the Dockerfile actually `COPY`s are re-included — `pyproject.toml`, `uv.lock`, and `app/`. Any file added to the repository is automatically kept out of the build context. If the Dockerfile gains a new `COPY` instruction, the corresponding path must be explicitly allowlisted in `.dockerignore` with a `!` prefix.
 
 ## Continuous integration
 

@@ -21,12 +21,8 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
-    """
-    Lifespan configuration for the FastAPI application, setting up the cache configuration.
-    """
-    caches.set_config(
-        {"default": {"cache": SimpleMemoryCache, "ttl": 60, "maxsize": 1000}}
-    )
+    """Configure application lifespan (cache setup/teardown)."""
+    caches.set_config({"default": {"cache": SimpleMemoryCache, "ttl": 60, "maxsize": 1000}})
     yield
 
 
@@ -37,7 +33,21 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS allows all origins for local development and template defaults; restrict for production.
+app.include_router(api_router, prefix="/api/v1")
+
+# Middleware is applied in LIFO order: last added = outermost (first to process requests).
+# Desired request flow: GZip → HTTPSRedirect (optional) → CORS → routes.
+app.add_middleware(
+    GZipMiddleware,
+    minimum_size=1500,
+    compresslevel=5,
+)
+
+if settings.force_https:
+    app.add_middleware(HTTPSRedirectMiddleware)
+
+# CORS must be outermost so OPTIONS preflight is answered before any redirect or compression.
+# Restrict ALLOWED_ORIGINS in production via the env var (default: ["*"] for local dev).
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Allows all origins
@@ -47,21 +57,11 @@ app.add_middleware(
     expose_headers=["X-Request-ID"],
 )
 
-app.add_middleware(
-    GZipMiddleware,
-    minimum_size=1500,
-    compresslevel=5,
-)
-app.include_router(api_router, prefix="/api/v1")
-
-if settings.force_https:
-    app.add_middleware(HTTPSRedirectMiddleware)
-
 
 @app.exception_handler(CoreError)
 async def error_handler(_: Request, exc: CoreError) -> JSONResponse:
-    """
-    Custom exception handler for `CoreError`.
+    """Custom exception handler for `CoreError`.
+
     Converts the error into a structured JSON response.
     """
     # Default to 400 if not specified on the exception class.

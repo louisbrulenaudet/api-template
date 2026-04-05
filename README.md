@@ -7,13 +7,13 @@
 [![Ruff](https://img.shields.io/static/v1?label=linting&message=Ruff&color=blueviolet&logo=ruff&logoColor=white)](https://github.com/astral-sh/ruff)
 [![GitHub Actions](https://img.shields.io/static/v1?label=ci/cd&message=GitHub%20Actions&color=blueviolet&logo=github-actions&logoColor=white)](https://github.com/features/actions)
 
-A minimal, production-ready template for building APIs with FastAPI, featuring strict data validation and Docker-based containerization, tailored for express deployment via a secure Cloudflare Tunnel.
+A minimal, production-ready FastAPI template with strict request/response validation (Pydantic v2 settings and DTOs), Docker and Compose for local development and production-oriented deploys, and an optional Cloudflare Tunnel for a public HTTPS URL without exposing an inbound port on your host.
 
 Use the Makefile and **uv** for dependency management and day-to-day commands.
 
 ## Tech Stack
 
-- **Language:** Python 3.13+ (strict type hints)
+- **Language:** Python 3.14+ (strict type hints)
 - **Framework:** FastAPI (async web framework)
 - **Validation:** Pydantic v2 (data validation and settings management)
 - **HTTP Client:** httpx (async HTTP client)
@@ -37,8 +37,7 @@ Use the Makefile and **uv** for dependency management and day-to-day commands.
 │   │       └── router.py            # API router configuration
 │   ├── core/
 │   │   └── config.py                # Application settings and configuration
-│   ├── dtos/
-│   │   └── models.py                # Pydantic DTOs for request/response validation
+│   ├── dtos/                        # Pydantic DTOs for request/response validation
 │   ├── enums/
 │   │   └── error_codes.py           # Centralized error code definitions
 │   ├── exceptions/
@@ -54,7 +53,7 @@ Use the Makefile and **uv** for dependency management and day-to-day commands.
 │   └── variables.mk                 # Makefile variables
 ├── tests/                           # Test suite
 ├── pyproject.toml                    # Project configuration, dependencies, and tool settings
-├── compose.yaml                     # Docker Compose configuration
+├── compose.yaml                     # Docker Compose (local development)
 ├── Dockerfile                       # Docker image definition
 ├── Makefile                         # Main Makefile with command shortcuts
 ├── uv.lock                          # Locked dependency graph (canonical for uv, CI, and Docker)
@@ -104,7 +103,11 @@ This project avoids the FastAPI Cloud CLI stack (`fastapi-cloud-cli` / `sentry-s
 
    ```sh
    docker compose up --build
+   # or
+   make docker-run-dev
    ```
+
+   The app is published on **127.0.0.1:8000** on the host (loopback only), matching `make dev`. Use [http://127.0.0.1:8000](http://127.0.0.1:8000) or `localhost` from the same machine.
 
    If you want to set values explicitly in YAML (not recommended for real secrets), you can use:
 
@@ -114,31 +117,20 @@ This project avoids the FastAPI Cloud CLI stack (`fastapi-cloud-cli` / `sentry-s
      ...
    ```
 
-### Optional: Cloudflare Tunnel (Development Sharing)
+4. **(Optional) Cloudflare Tunnel (development sharing)**
 
-If you want to share the API without opening port `8001` to the public internet (e.g. for testing purposes):
+   To share the API without opening port `8000` on your LAN (e.g. for testing): set `TUNNEL_TOKEN` in `.env` and run `make docker-run-dev-tunnel` (tunnel is opt-in via the Compose profile `tunnel`). In the Compose workflow, `cloudflared` prints the public tunnel URL in the terminal (or use `make docker-tunnel-logs`).
 
-- Docker Compose hot-reload workflow: set `TUNNEL_TOKEN` in `.env` and run `make run-dev-tunnel` (tunnel is opt-in via the Compose profile `tunnel`).
-
-In the Compose workflow, `cloudflared` will print the public tunnel URL in the terminal (or via `make tunnel-logs` for the Compose workflow).
-
-3. **Development:**
+5. **Development:**
 
    ```sh
    make dev
    ```
 
+   Default dev port is **8000** (`DEV_PORT` in [`make/variables.mk`](make/variables.mk)); Docker Compose dev uses the same port on the host.
+
    - The API will be available at [http://localhost:8000](http://localhost:8000)
    - Ping endpoint: [http://localhost:8000/api/v1/ping](http://localhost:8000/api/v1/ping)
-
-4. **Production:**
-
-   ```sh
-   make prod
-   ```
-
-   - Production server runs on port 8001 by default at [http://0.0.0.0:8001](http://0.0.0.0:8001)
-   - Ping endpoint: [http://0.0.0.0:8001/api/v1/ping](http://0.0.0.0:8001/api/v1/ping)
 
 ## Common Commands
 
@@ -149,13 +141,14 @@ The following Makefile commands are available for development, formatting, testi
 | Command                | Description                                 |
 |------------------------|---------------------------------------------|
 | `make dev`             | Run development server with hot reloading   |
-| `make prod`            | Run production server on port 8001          |
 | `make test`            | Run the test suite with coverage            |
 | `make sync`            | Sync `.venv` from `uv.lock` (includes `dev` extra) |
 | `make sync-all`        | Sync with all optional extras                |
 | `make install`         | Alias for `make sync`                       |
+| `make lock`            | Lock project dependencies                   |
 | `make update`         | Update locked deps (`uv lock --upgrade` + sync) |
 | `make clean-venv`      | Remove local `.venv`                        |
+| `make type-check`      | Type check the source code using Ty         |
 | `make check`           | Run code quality checks (Ruff linting)      |
 | `make format`          | Format the codebase using Ruff              |
 | `make pre-commit`      | Run pre-commit checks on all files          |
@@ -164,20 +157,22 @@ The following Makefile commands are available for development, formatting, testi
 
 | Command                | Description                                  |
 |------------------------|----------------------------------------------|
-| `make build`           | Create application containers                |
-| `make rebuild`         | Rebuild containers with fresh configuration  |
-| `make start`           | Launch application services                  |
-| `make stop`            | Stop all running services                    |
-| `make restart`         | Restart all application services             |
-| `make logs`            | Display container logs                       |
-| `make clean`           | Remove all containers and volumes            |
-| `make run-dev`         | Start development server with live reload    |
-| `make run-dev-tunnel`  | Start dev + Cloudflare Tunnel (opt-in)       |
-| `make tunnel-logs`     | Follow Cloudflare Tunnel logs                |
-| `make tunnel-stop`     | Stop Cloudflare Tunnel (keeps app)           |
-| `make check-docker`    | Verify Docker installation and configuration |
+| `make docker-check`    | Verify Docker installation and configuration |
+| `make docker-build`    | Create application containers                |
+| `make docker-rebuild`  | Rebuild containers with fresh configuration  |
+| `make docker-start`    | Launch application services                  |
+| `make docker-stop`     | Stop all running services                    |
+| `make docker-restart`  | Restart all application services             |
+| `make docker-logs`     | Display container logs                       |
+| `make docker-clean`    | Remove all containers and volumes            |
+| `make docker-run-dev`  | Start development server with live reload    |
+| `make docker-run-dev-tunnel`  | Start dev + Cloudflare Tunnel (opt-in)       |
+| `make docker-tunnel-logs`     | Follow Cloudflare Tunnel logs                |
+| `make docker-tunnel-stop`     | Stop Cloudflare Tunnel (keeps app)           |
 
 The [`Dockerfile`](Dockerfile) exposes two targets: `runtime` (uvicorn, dependencies only—what CI builds) and `reload` (same dependency set as `runtime`, but runs `fastapi dev` with reload for local Compose). Optional `[dev]` extras (pytest, ruff, etc.) are for local/CI tooling, not installed in the image.
+
+The [`.dockerignore`](.dockerignore) uses an **allowlist** strategy: everything is excluded by default (`*`) and only the three paths the Dockerfile actually copies are re-included — `pyproject.toml`, `uv.lock`, and `app/`. This keeps the build context minimal and ensures any file added to the repository in the future is automatically excluded without requiring a `.dockerignore` update.
 
 ## Best Practices
 
@@ -217,34 +212,6 @@ If you need to install packages such as transformers, you can do so with the fol
 uv add transformers
 ```
 
-## Quick Start
-
-### 1. Initialize the environment
-
-```sh
-make sync
-```
-
-### 2. Start FastAPI server
-
-The backend can be run in two modes: development and production. The development mode is intended for local development with hot-reloading, while the production mode is optimized for performance and stability. Here's how to start the development server:
-
-```sh
-make dev
-```
-
-- The API will be available at [http://localhost:8000](http://localhost:8000) by default with a ping endpoint at [http://localhost:8000/api/v1/ping](http://localhost:8000/api/v1/ping).
-
-### 2.1 Start production server
-
-Here's how to start the production server:
-
-```sh
-make prod
-```
-
-- The production server will run on port 8001 by default at [http://0.0.0.0:8001](http://0.0.0.0:8001) with a ping endpoint at [http://0.0.0.0:8001/api/v1/ping](http://0.0.0.0:8001/api/v1/ping).
-
 ## Code Quality
 
 - Lint and check code:
@@ -255,6 +222,11 @@ make prod
 - Format code:
   ```sh
   make format
+  ```
+
+- Type check:
+  ```sh
+  make type-check
   ```
 
 ## Citing this project
