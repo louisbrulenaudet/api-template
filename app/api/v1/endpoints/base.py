@@ -6,16 +6,15 @@ from fastapi import APIRouter, Depends
 from app.core.config import Settings, get_settings
 from app.dtos import HealthResponse, PingResponse
 
-router = APIRouter()
+router = APIRouter(tags=["Health"])
 
 
 @router.get(
     "/ping",
-    tags=["Health"],
     summary="Ping endpoint",
     description="Health check endpoint for readiness/liveness probes.",
 )
-async def ping(
+def ping(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> PingResponse:
     """Health check endpoint for readiness/liveness probes.
@@ -42,11 +41,10 @@ async def ping(
 
 @router.get(
     "/health",
-    tags=["Health"],
     summary="Health check endpoint",
     description="Lightweight healthcheck endpoint for Docker/K8s.",
 )
-async def health() -> HealthResponse:
+def health() -> HealthResponse:
     """Lightweight healthcheck endpoint for Docker/K8s.
 
     Returns:

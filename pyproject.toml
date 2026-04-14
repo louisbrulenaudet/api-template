@@ -223,3 +223,6 @@ exclude_lines = [
     "raise ImportError",
 ]
 ignore_errors = true
+
+[tool.fastapi]
+entrypoint = "app.main:app"
