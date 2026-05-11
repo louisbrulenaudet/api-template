@@ -19,7 +19,7 @@ certifi==2026.2.25
     #   httpx
 cfgv==3.5.0
     # via pre-commit
-click==8.3.1
+click==8.3.3
     # via
     #   rich-toolkit
     #   typer
