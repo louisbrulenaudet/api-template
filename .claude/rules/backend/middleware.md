@@ -1,0 +1,28 @@
+---
+paths:
+  - "app/main.py"
+---
+
+# Middleware and App Entry
+
+`app/main.py` owns the FastAPI app, lifespan, middleware stack, and global `CoreError` handler.
+
+## Middleware order
+
+Starlette applies middleware in **LIFO** order (last added = outermost). Keep CORS outermost so `OPTIONS` preflight is answered before redirects/compression.
+
+Documented request flow: **CORS → (optional HTTPS redirect) → GZip → routes**.
+
+## Security
+
+- Template CORS defaults to allow-all origins for local development — **restrict in production** via configuration; never ship `allow_origins=["*"]` with credentials.
+- Do not log secrets, raw API keys, or full auth headers.
+
+## Lifespan
+
+- Configure aiocache (or other process-wide async resources) in lifespan setup/teardown.
+- Avoid mutable global per-request state; use FastAPI dependencies / request context.
+
+## Exception handler
+
+Keep the `CoreError` handler returning structured JSON. When adding error types that need special status codes, update the handler or class-level `http_status_code` in the same change.

@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.v1.router import router as api_router
 from app.core.config import get_settings
+from app.core.http_client import create_http_client
 from app.exceptions.core_exception import CoreError
 
 logger = logging.getLogger(__name__)
@@ -20,10 +21,14 @@ settings = get_settings()
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
-    """Configure application lifespan (cache setup/teardown)."""
+async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+    """Configure application lifespan (cache + shared HTTP client)."""
     caches.set_config({"default": {"cache": SimpleMemoryCache, "ttl": 60, "maxsize": 1000}})
-    yield
+    app.state.http_client = create_http_client()
+    try:
+        yield
+    finally:
+        await app.state.http_client.aclose()
 
 
 app = FastAPI(

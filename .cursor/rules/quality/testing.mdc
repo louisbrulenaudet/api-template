@@ -1,0 +1,26 @@
+---
+description: pytest conventions — trust boundaries, narrow runs, never weaken source for green tests
+globs: tests/**,**/conftest.py
+alwaysApply: false
+---
+
+# Testing
+
+Tests use **pytest** (+ pytest-asyncio / pytest-cov). Prefer the narrowest run that covers the change.
+
+## What to test
+
+- Trust boundaries: Pydantic DTO validation, `CoreError` → HTTP mapping, route status codes and payloads.
+- Prefer observable behavior (status, JSON body) over private internals.
+- Keep tests deterministic; no order dependence.
+
+## Commands
+
+- Full suite: `make test` / `uv run pytest`
+- Narrow: `uv run pytest tests/test_base.py` or `uv run pytest path::test_name`
+
+## Discipline
+
+- Never weaken source to make a test pass. Never blanket-skip failing tests. See core/guardrails.
+- When you change a DTO, enum, or route contract, update the asserting tests in the **same** change.
+- Clear `get_settings.cache_clear()` in tests that mutate settings/env.

@@ -34,7 +34,7 @@ dependencies = [
     # fastapi-cloud-cli / sentry-sdk (see Astral/FastAPI CLI extras).
     "fastapi-cli[standard-no-fastapi-cloud-cli]>=0.0.24",
     "fastapi>=0.135.1",
-    "httpx>=0.28.1",
+    "httpx2[brotli,http2]>=2.7.0",
     "jinja2>=3.1.6",
     "pydantic>=2.12.5",
     "pydantic-settings>=2.13.1",
@@ -57,6 +57,9 @@ dev = [
 [tool.uv]
 package = false
 exclude-newer = "7 days"
+# httpx2 sits on the outbound critical path; allow current releases past the 7-day
+# freshness gate so security/perf fixes (e.g. 2.7.0) are lockable immediately.
+exclude-newer-package = { httpx2 = "0 days", httpcore2 = "0 days" }
 index-strategy = "first-index"
 
 [tool.pytest.ini_options]

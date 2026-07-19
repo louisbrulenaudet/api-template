@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeShellExecution": [
+      {
+        "command": "hooks/git/guard-secret-commit.sh",
+        "timeout": 10,
+        "failClosed": true
+      },
+      {
+        "command": "hooks/git/guard-destructive-git.sh",
+        "timeout": 10,
+        "failClosed": true
+      }
+    ],
+    "beforeReadFile": [
+      {
+        "command": "hooks/security/guard-secret-read.sh",
+        "timeout": 10,
+        "failClosed": true
+      }
+    ],
+    "beforeTabFileRead": [
+      {
+        "command": "hooks/security/guard-secret-read.sh",
+        "timeout": 10,
+        "failClosed": true
+      }
+    ],
+    "afterFileEdit": [
+      {
+        "command": "hooks/quality/check-changed.sh",
+        "timeout": 30
+      }
+    ],
+    "sessionStart": [
+      {
+        "command": "hooks/logging/session-start.sh",
+        "timeout": 10
+      }
+    ]
+  }
+}

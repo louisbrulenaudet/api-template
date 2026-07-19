@@ -1,0 +1,37 @@
+# Index-only exclusions: keep readable via explicit open, but do not index.
+# Prefer this over .cursorignore for generated/heavy paths that are not secrets.
+
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+.tox/
+.nox/
+.hypothesis/
+.cache/
+.uv/
+.logfire/
+
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+dist/
+build/
+*.egg-info/
+.eggs/
+wheels/
+site/
+docs/_build/
+
+hooks/logs/
+
+# Lockfile is large; Cursor also skips *.lock by default for indexing.
+uv.lock

@@ -1,0 +1,31 @@
+---
+paths:
+  - "app/dtos/**"
+  - "app/enums/**"
+---
+
+# Pydantic Contracts
+
+Pydantic v2 models are the sole wire-shape source of truth. Load the `pydantic-best-practices` skill for performance patterns.
+
+## Ownership
+
+- A shape has exactly one owner under `app/dtos/` or `app/enums/`.
+- Define it once; import everywhere else. Never copy a DTO or enum member across modules.
+- Prefer one focused module per public model when practical; re-export from package `__init__.py`.
+
+## Authoring
+
+- No business logic in DTO modules — shapes and validation only.
+- Use `Field(...)` with clear descriptions for OpenAPI.
+- Keep error messages client-safe: no internal paths, stack traces, or secrets.
+- Prefer additive field changes. Breaking changes need a deliberate API version / migration and consumer updates in the same PR.
+
+## Inference
+
+- Do not maintain parallel `TypedDict` / dataclass mirrors of the same wire shape.
+- Route handlers return the DTO type (or declare `response_model=`) so FastAPI/OpenAPI stay aligned.
+
+## Discipline
+
+When a contract changes, update producers, consumers, and tests in the **same** change. See [guardrails.md](../core/guardrails.md).

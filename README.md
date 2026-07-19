@@ -16,7 +16,7 @@ Use the Makefile and **uv** for dependency management and day-to-day commands.
 - **Language:** Python 3.14+ (strict type hints)
 - **Framework:** FastAPI (async web framework)
 - **Validation:** Pydantic v2 (data validation and settings management)
-- **HTTP Client:** httpx (async HTTP client)
+- **HTTP Client:** httpx2 (async HTTP client with brotli + HTTP/2)
 - **Caching:** aiocache (async caching)
 - **Formatting/Linting:** Ruff (fast Python linter and formatter)
 - **Package Manager:** uv (fast Python package installer and resolver)
@@ -151,6 +151,7 @@ The following Makefile commands are available for development, formatting, testi
 | `make type-check`      | Type check the source code using Ty         |
 | `make check`           | Run code quality checks (Ruff linting)      |
 | `make format`          | Format the codebase using Ruff              |
+| `make ci`              | Ruff format/lint + ty (no tests)            |
 | `make pre-commit`      | Run pre-commit checks on all files          |
 
 ### Docker Commands

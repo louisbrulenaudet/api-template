@@ -1,0 +1,45 @@
+# Block Agent / Tab / Inline Edit / @ — secrets and never-prompt paths only.
+# Index noise belongs in .cursorindexingignore (AI can still open those when needed).
+# Cursor already respects .gitignore for indexing; do not duplicate it here.
+
+# Secrets & credentials
+.env
+.env.*
+!.env.template
+**/*credentials*
+**/*secret*
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/id_rsa
+**/id_rsa.pub
+
+# Virtualenvs & bytecode (never useful in prompts)
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Coverage & tool caches (noise + large)
+htmlcov/
+.coverage
+.coverage.*
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+.tox/
+.nox/
+.hypothesis/
+.cache/
+.uv/
+.logfire/
+
+# Hook runtime logs
+hooks/logs/
+
+# OS junk
+.DS_Store

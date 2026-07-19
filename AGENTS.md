@@ -1,375 +1,100 @@
 # api-template Agent Instructions
 
-## Project Overview
+Lean always-on map for Cursor and Claude Code. Path-specific conventions live in `.cursor/rules/` and `.claude/rules/` — load those when editing matching files. Deep FastAPI/Pydantic guidance lives in skills under `.cursor/skills/` / `.claude/skills/`.
 
-This repository is a minimal, production-ready **FastAPI** template: strict **Pydantic** validation, **Docker**-based containerization, and an optional **Cloudflare Tunnel** workflow for secure exposure without opening ports.
+## Overview
 
-## Tech Stack
+Minimal production-ready **FastAPI** template: strict **Pydantic** validation, **Docker** containerization, optional **Cloudflare Tunnel**. Python 3.14+, uv, Ruff, pytest.
 
-- **Language:** Python 3.14+ (strict type hints)
-- **Framework:** FastAPI (async web framework)
-- **Validation:** Pydantic v2 (data validation and settings management)
-- **HTTP Client:** httpx (async HTTP client)
-- **Caching:** `functools.lru_cache` on `get_settings()` (singleton settings); aiocache (async TTL caches)
-- **Formatting/Linting:** Ruff (fast Python linter and formatter)
-- **Package Manager:** uv (fast Python package installer and resolver)
-- **Build Tools:** Docker, Docker Compose
-- **Automation:** Makefile
-- **Environment:** python-dotenv (.env)
-- **Testing:** pytest, pytest-asyncio, pytest-cov
-
-## Project Structure
+## Repo map
 
 ```
-.
-├── app/
-│   ├── api/
-│   │   └── v1/
-│   │       ├── endpoints/
-│   │       │   └── base.py          # Health check endpoints (ping, health)
-│   │       └── router.py            # API router configuration
-│   ├── core/
-│   │   └── config.py                # Application settings and configuration
-│   ├── dtos/
-│   │   └── models.py                # Pydantic DTOs for request/response validation
-│   ├── enums/
-│   │   └── error_codes.py           # Centralized error code definitions
-│   ├── exceptions/
-│   │   ├── core_exception.py        # Base exception class with structured error handling
-│   │   └── client_initialization_error.py  # Client initialization error
-│   ├── utils/
-│   │   └── decorators.py            # Utility decorators (retry, async_retry)
-│   └── main.py                      # FastAPI application entry point with middleware
-├── make/
-│   ├── dev.mk                       # Development commands
-│   ├── docker.mk                    # Docker-related commands
-│   ├── help.mk                      # Help command implementation
-│   └── variables.mk                 # Makefile variables
-├── tests/                           # Test suite
-├── pyproject.toml                    # Project configuration, dependencies, and tool settings
-├── compose.yaml                     # Docker Compose configuration
-├── Dockerfile                       # Docker image definition
-├── Makefile                         # Main Makefile with command shortcuts
-├── uv.lock                          # Locked dependency graph (canonical for uv sync / CI / Docker)
-└── requirements.txt                 # Optional pip-style export (`make export-requirements`; uv.lock is canonical)
+app/
+  api/v1/endpoints/   # HTTP routes (thin handlers)
+  core/               # Settings + shared httpx2 AsyncClient
+  dtos/               # Wire DTOs (ping_response.py, health_response.py, …)
+  enums/              # ErrorCodes
+  exceptions/         # CoreError subclasses
+  utils/              # retry / async_retry
+  main.py             # App, middleware, CoreError handler
+tests/                # pytest
+make/                 # Makefile fragments (dev, docker, help, variables)
+hooks/                # Shared Cursor + Claude agent hooks (not human git hooks)
 ```
 
-## Environment Configuration
+Path rules: `backend/fastapi-routes`, `contracts/pydantic-dtos`, `quality/*`, `ops/docker`, `ops/ci`, plus always-on `core/guardrails`.
 
-### Required Environment Variables
+## Setup
 
-The application uses Pydantic Settings for configuration management. Required environment variables (defined in `app/core/config.py`):
-
-- `APP_NAME` (default: "Backend") - Application name
-- `API_KEY` - API key for authentication
-- `API_CLIENT` - API client identifier
-
-### Telemetry and tooling
-
-- **FastAPI CLI:** Dependencies use `fastapi-cli[standard-no-fastapi-cloud-cli]` so the stack does not install `fastapi-cloud-cli` / `sentry-sdk` (the default `fastapi[standard]` extra pulls those).
-- **Pydantic Logfire:** `LOGFIRE_SEND_TO_LOGFIRE` and `LOGFIRE_PYDANTIC_PLUGIN_RECORD` are set to off/false via [`make/variables.mk`](make/variables.mk), [`Dockerfile`](Dockerfile), [`compose.yaml`](compose.yaml), and [`.github/workflows/ci.yml`](.github/workflows/ci.yml) as defense-in-depth.
-- **uv:** There is no documented environment variable to disable metadata included in uv’s User-Agent on registry requests (PyPI linehaul–style data). Mitigations are organizational (private indexes, proxy policy). See [astral-sh/uv#8474](https://github.com/astral-sh/uv/issues/8474).
-
-### Setup Instructions
-
-1. **Install dependencies:**
-
-   ```sh
-   make sync
-   ```
-
-   (`make install` is an alias for `sync`. Development tools come from the `dev` optional extra, same as CI: `uv sync --locked --extra dev`.)
-
-2. **Configure environment:**
-
-   Copy `.env.template` to `.env` and fill in required variables:
-
-   ```
-   APP_NAME=Backend
-   API_KEY=your_api_key_here
-   API_CLIENT=your_client_id_here
-   ```
-
-3. **Development:**
-
-   Local `make dev` and the dev stack in [`compose.yaml`](compose.yaml) both use port **8000** on the host by default (`DEV_PORT` in [`make/variables.mk`](make/variables.mk) for local runs).
-
-   ```sh
-   make dev
-   # or: docker compose up --build / make docker-run-dev
-   ```
-
-   - The API will be available at [http://localhost:8000](http://localhost:8000) (Compose: [http://127.0.0.1:8000](http://127.0.0.1:8000) on the host)
-   - Ping endpoint: [http://localhost:8000/api/v1/ping](http://localhost:8000/api/v1/ping)
-
-4. **Production:**
-
-   ```sh
-   make prod
-   ```
-
-   - Production server runs on port 8001 by default at [http://0.0.0.0:8001](http://0.0.0.0:8001)
-   - Ping endpoint: [http://0.0.0.0:8001/api/v1/ping](http://0.0.0.0:8001/api/v1/ping)
-
-## Common Commands
-
-The following Makefile commands are available for development, formatting, testing, and deployment:
-
-### Development Commands
-
-| Command                | Description                                 |
-|------------------------|---------------------------------------------|
-| `make dev`             | Run development server with hot reloading   |
-| `make prod`            | Run production server on port 8001          |
-| `make test`            | Run the test suite with coverage            |
-| `make sync`            | Sync `.venv` from `uv.lock` (includes `dev` extra; same idea as CI) |
-| `make sync-all`        | Sync with all optional extras from `pyproject.toml` |
-| `make install`         | Alias for `make sync`                      |
-| `make lock`            | Lock project dependencies                   |
-| `make update`         | Update project dependencies (`uv lock --upgrade` + sync) |
-| `make clean-venv`      | Remove local `.venv` only                  |
-| `make type-check`      | Type check the source code using Ty         |
-| `make check`           | Run code quality checks (Ruff linting)      |
-| `make format`          | Format the codebase using Ruff              |
-| `make pre-commit`      | Run pre-commit checks on all files          |
-
-### Docker Commands
-
-| Command                | Description                                  |
-|------------------------|----------------------------------------------|
-| `make docker-check`    | Verify Docker installation and configuration |
-| `make docker-build`    | Create application containers                |
-| `make docker-rebuild`  | Rebuild containers with fresh configuration  |
-| `make docker-start`    | Launch application services                  |
-| `make docker-stop`     | Stop all running services                    |
-| `make docker-restart`  | Restart all application services             |
-| `make docker-logs`     | Display container logs                       |
-| `make docker-clean`    | Remove all containers and volumes            |
-| `make docker-run-dev`  | Start development server with live reload    |
-| `make docker-deploy-prod`     | Build and run production stack (`compose.prod.yml`; supports `APP_HOST_PORT`, `UVICORN_WORKERS`) |
-| `make docker-logs-prod`       | Follow logs for the production `app` service |
-| `make docker-run-dev-tunnel`  | Start dev server with Cloudflare Tunnel (opt-in)       |
-| `make docker-tunnel-logs`     | Follow Cloudflare Tunnel logs                |
-| `make docker-tunnel-stop`     | Stop Cloudflare Tunnel (keeps app)           |
-
-## Middleware Stack
-
-The application uses a comprehensive middleware stack for security, performance, and functionality:
-
-### Security Middleware
-
-- **CORS:** Configurable cross-origin resource sharing (template default allows all origins for local development — **restrict in production**)
-- **Error Handling:** Global exception handler for structured error responses
-
-### Performance Middleware
-
-- **GZip Compression:** Response compression for better performance (minimum size: 1000 bytes)
-- **Async Support:** Full async/await support throughout the application
-
-### Error Handling
-
-- **Global Exception Handler:** Centralized error handling with logging
-- **Structured Error Responses:** JSON-safe error representation for API responses
-- **HTTP Status Code Mapping:** Automatic mapping of exceptions to appropriate status codes
-
-## Caching strategy (`lru_cache` vs `aiocache`)
-
-- **`get_settings()`** in [`app/core/config.py`](app/core/config.py) uses `@lru_cache(maxsize=1)` so `Settings()` is built once per process and `Depends(get_settings)` stays cheap. That is the only `lru_cache` in this template and the right place for it.
-- **`_get_package_version()`** is not separately cached: it runs when a `Settings` instance is created, and the whole `Settings` object is already memoized by `get_settings()`. Extra `lru_cache` there would only help if `Settings()` were constructed often outside `get_settings()` (not the case here).
-- **`aiocache`** (configured in [`app/main.py`](app/main.py) lifespan) is for **async** caches with TTL and size limits. Use it for async I/O or shared async results, not as a substitute for `lru_cache` on sync helpers.
-- **When to add `lru_cache` later:** repeated, identical, synchronous, pure work with bounded keys — e.g. helpers that compile fixed regex patterns, zero-arg loaders for static assets, or stable pure transforms. **Avoid** it on `async def`, on functions keyed by unbounded user input, or where values must track live env changes without process restart.
-- **Tests:** If tests clear or replace settings, call `get_settings.cache_clear()` so a fresh `Settings()` is built.
-
-## Error Handling
-
-This application implements a comprehensive error handling strategy using a custom `CoreError` base class for centralized error management. All errors follow a structured approach with proper logging, serialization, and HTTP status code mapping.
-
-### CoreError Foundation
-
-All errors must be instances of `CoreError` or its subclasses. The `CoreError` class provides:
-
-- **Structured Error Codes:** Unique symbolic codes for error identification (defined in `app/enums/error_codes.py`)
-- **Contextual Details:** Optional metadata for debugging and monitoring
-- **Automatic Logging:** Built-in structured logging with error context
-- **Serialization:** JSON-safe error representation for API responses via `to_dict()` method
-- **Type Safety:** Full type hints for error attributes
-
-### Error Classification
-
-#### Application-Specific Errors
-
-Errors unique to this application are defined in `app/exceptions/` directory:
-
-```python
-# In app/exceptions/client_initialization_error.py
-from app.enums import ErrorCodes
-from app.exceptions.core_exception import CoreError
-
-class ClientInitializationError(CoreError):
-    def __init__(self, details: Exception | str) -> None:
-        super().__init__(
-            "The client initialization failed.",
-            ErrorCodes.CLIENT_INITIALIZATION_ERROR,
-            details=str(details),
-        )
+```sh
+make sync                          # uv sync --locked --extra dev (same idea as CI)
+cp .env.template .env              # fill API_KEY, API_CLIENT, …
+make dev                           # http://localhost:8000 — ping: /api/v1/ping
 ```
 
-#### Available Error Types
+Required env (see `app/core/config.py`): `APP_NAME` (default `Backend`), `API_KEY`, `API_CLIENT`.
 
-- `ClientInitializationError` - Raised when client initialization fails
+## Essential commands
 
-### Error Code Management
+| Command | Purpose |
+|---------|---------|
+| `make sync` / `make install` | Sync `.venv` from `uv.lock` (+ dev extra) |
+| `make lock` / `make update` | Lock / upgrade dependencies |
+| `make dev` / `make prod` | Dev (8000) / prod (8001) servers |
+| `make check` / `make format` | Ruff lint / format (+ `--fix` on format) |
+| `make type-check` | Ty |
+| `make test` | pytest + coverage |
+| `make ci` | Local gate: `format` (Ruff) + `type-check` (ty); no tests |
+| `make pre-commit` | pre-commit all files |
+| `make docker-*` | See `make/docker.mk` / `make help` |
 
-Error codes are centrally managed in `app/enums/error_codes.py`:
+## Critical gotchas
 
-```python
-class ErrorCodes(enum.StrEnum):
-    CLIENT_INITIALIZATION_ERROR = "CLIENT_INITIALIZATION_ERROR"
-```
+- **CORS** defaults to allow-all origins for local template use — **restrict in production**.
+- **`get_settings()`** is `@lru_cache(maxsize=1)`. Tests that change env must call `get_settings.cache_clear()`.
+- **`lru_cache`** only on `get_settings()`; use **aiocache** for async TTL caches (configured in app lifespan).
+- **Outbound HTTP** uses a shared lifespan-scoped `httpx2.AsyncClient` on `app.state.http_client` (`app/core/http_client.py`); inject via `Depends(get_http_client)`. Do not create per-request clients.
+- **Docker build context** is an allowlist in `.dockerignore` (`*` then `!pyproject.toml`, `!uv.lock`, `!app/`). New `COPY` paths need a matching `!` entry.
+- **Do not hand-edit `uv.lock`** — use `make lock` / `uv lock`.
+- **Logfire** send/plugin flags stay off via Makefile / Docker / CI unless explicitly enabled.
+- **Never commit `.env`**, keys, or credentials. Agent hooks block secret staging/reads and destructive git when wired.
+- Prefer **`CoreError`** subclasses + `ErrorCodes` for domain failures; DTO modules hold shapes only.
 
-### Exception Handler
+## API surface (template)
 
-The global exception handler in `app/main.py` maps specific exceptions to HTTP status codes:
+- `GET /api/v1/ping` → `PingResponse`
+- `GET /api/v1/health` → `HealthResponse`
 
-```python
-@app.exception_handler(CoreError)
-async def error_handler(_: Request, exc: CoreError) -> JSONResponse:
-    status_codes = {
-        "TaskNotFoundError": 404,
-        "TaskInitalizationError": 500,
-    }
-    status_code = status_codes.get(exc.__class__.__name__, 400)
-    return JSONResponse(
-        status_code=status_code,
-        content={
-            "error": exc.__class__.__name__,
-            "message": exc.message,
-            "code": exc.code,
-            "details": exc.details or {},
-        },
-    )
-```
+## Agent harness
 
-## Request Validation with Pydantic
+| Tool | Entry | Path rules | Hooks / MCP | Shared scripts |
+|------|-------|------------|-------------|----------------|
+| Cursor | this file | `.cursor/rules/**/*.mdc` | `.cursor/hooks.json`, `.cursor/mcp.json` (Context7) | `hooks/` |
+| Claude Code | `CLAUDE.md` → `@AGENTS.md` | `.claude/rules/**/*.md` | `.claude/settings.json`, `.mcp.json` (Context7) | `hooks/` |
 
-The API uses Pydantic v2 models for type-safe request and response validation. This approach provides automatic validation, type inference, and error handling.
+Subagents: `.cursor/agents/` and `.claude/agents/` (`ci-verifier`, `test-runner`, `docs-researcher`). Slash review prompts: `.cursor/commands/`. Skills: `.cursor/skills/` and `.claude/skills/`.
 
-### Implementation Pattern
+Keep `.cursor/rules` and `.claude/rules` content in sync when changing conventions (dual trees, same intent).
 
-```python
-from pydantic import BaseModel, Field
-from fastapi import APIRouter
+### Context path hygiene
 
-# Define response model
-class PingResponse(BaseModel):
-    status: str = Field(default="ok", description="The status of the health check.")
-    uptime: int = Field(default=0, description="The uptime of the service in seconds.")
-    timestamp: int = Field(default=0, description="The current timestamp.")
+| Mechanism | Effect | Use for |
+|-----------|--------|---------|
+| `.cursorignore` | Blocks Agent, Tab, Inline Edit, `@` | Secrets + never-prompt paths (`.env`, keys, `.venv`, caches) |
+| `.cursorindexingignore` | Index only; AI can still open | Heavy/generated noise (`htmlcov/`, `uv.lock`, build artifacts) |
+| `.gitignore` | VCS + default Cursor index / Claude search | Standard ignore |
+| Claude `permissions.deny` `Read(...)` | Excludes from discovery, search, and reads | Same noise/secrets for Claude Code |
+| `.worktreeinclude` | Copies listed gitignored files into Claude worktrees | Local `.env` for worktree DX |
 
-# Use in route
-@router.get("/ping", response_model=PingResponse)
-async def ping() -> PingResponse:
-    return PingResponse(
-        status="ok",
-        uptime=uptime,
-        timestamp=now,
-    )
-```
+Do not put index-only noise in `.cursorignore` — that over-blocks the Agent. Optional Context7 API key stays in user MCP / local overlay — never commit it.
 
-### DTO Pattern
+## Finish gate
 
-All data transfer objects are defined in `app/dtos/models.py`:
-
-- `PingResponse` - Health check response
-
-## Utility Decorators
-
-The application provides utility decorators for common patterns in `app/utils/decorators.py`:
-
-### Retry Decorator
-
-```python
-from app.utils.decorators import retry
-
-@retry(max_retries=3, sleep_time=1, raises_on_exception=True)
-def fetch_data():
-    # Function that may fail
-    pass
-```
-
-### Async Retry Decorator
-
-```python
-from app.utils.decorators import async_retry
-
-@async_retry(max_retries=3, sleep_time=1, raises_on_exception=True)
-async def async_fetch_data():
-    # Async function that may fail
-    pass
-```
-
-## Coding Conventions
-
-- Use **strict Python 3.14+** with comprehensive type hints
-- **Variables:** Use `snake_case` for all variables and functions (e.g., `account_id`, `get_account()`)
-- **Classes:** Use `PascalCase` for class names (e.g., `CoreError`, `PingResponse`)
-- **Constants:** Use `UPPER_SNAKE_CASE` for constants (e.g., `API_KEY`, `MAX_RETRIES`)
-- **Enums:** Enum names in `PascalCase`, enum members in `UPPER_SNAKE_CASE` (e.g., `class ErrorCodes(enum.StrEnum): CLIENT_INITIALIZATION_ERROR = "CLIENT_INITIALIZATION_ERROR"`)
-- All API endpoints must use **Pydantic models** for request/response validation
-- Use **CoreError** subclasses for structured error handling with appropriate status codes
-- **Formatting:** Enforced by Ruff (double quotes, spaces, line length 88)
-- **Type hints:** Required for all function parameters and return types
-- **Route organization:** Keep route handlers modular and focused on single responsibilities
-- **Modular development:** Implement each component in its own dedicated router and corresponding business logic files within the `core` directory
-
-## Best Practices
-
-- Always validate request/response data using Pydantic models before processing
-- Always use DTO objects for data propagation during runtime
-- Use proper HTTP status codes for different error scenarios (400 for validation errors, 404 for not found, 500 for server errors)
-- Implement comprehensive error handling with meaningful error messages
-- Use environment variables for configuration and secrets (never hardcode sensitive data)
-- Always run `make check` and `make format` before committing
-- Use Makefile for common tasks to ensure consistency across the team
-- Follow RESTful API design principles
-- Use utility decorators (`retry`, `async_retry`) for operations that may fail transiently
-- Implement proper async/await patterns throughout the application
-- Use dependency injection for testability and maintainability
-- Document all public functions and classes with docstrings
-- Write tests for all business logic and API endpoints
-
-- **Template / modular development:** Keep components modular and independent to enable parallel work and clean merges
-
-## API Endpoints
-
-### Health Check Endpoints
-
-- **GET `/api/v1/ping`**
-  - Health check endpoint with status, uptime, and timestamp
-  - Response: `PingResponse` model
-
-- **GET `/api/v1/health`**
-  - Lightweight healthcheck for Docker/K8s
-  - Returns: `{"status": "ok"}`
-
-## Docker build context
-
-The [`.dockerignore`](.dockerignore) uses an **allowlist** strategy: everything is excluded by default (`*`) and only the three paths the Dockerfile actually `COPY`s are re-included — `pyproject.toml`, `uv.lock`, and `app/`. Any file added to the repository is automatically kept out of the build context. If the Dockerfile gains a new `COPY` instruction, the corresponding path must be explicitly allowlisted in `.dockerignore` with a `!` prefix.
-
-## Continuous integration
-
-GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs Ruff and pytest via `uv sync --locked --extra dev`, then builds the Docker `runtime` image. The **uv** version is pinned in the workflow (`astral-sh/setup-uv`) for reproducible CI—bump it deliberately when upgrading uv (verify locally with `uv lock` and `make test` before merging).
+Before considering work done: `make ci` for Ruff + ty, and run the narrowest relevant tests when behavior changes (`make test` or `uv run pytest …`). Do not silence lint/type/test failures — fix the cause (see `core/guardrails`).
 
 ## Contribution
 
-- Follow all coding conventions and rules
-- Ensure all changes pass `make check`, `make format`, and `make test`
-- Update this documentation when adding new endpoints or functionality
-- Use proper error handling and status codes
-- Validate all request/response data with Pydantic models
-- Follow RESTful API design principles
-- Implement proper type hints for all functions
-- Write tests for new features
-- Use utility decorators for retry logic when appropriate
-- Keep components modular and independent when extending this template
-- **Security Note:** The CORS middleware allows all origins by default for local development. Restrict origins in production.
+- Follow path-scoped rules for the files you touch.
+- Validate request/response data with Pydantic; keep handlers thin.
+- Use Makefile targets for consistency with CI.
+- Update this file only for always-relevant facts; put domain detail in rules or skills.

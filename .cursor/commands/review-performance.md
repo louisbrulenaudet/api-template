@@ -6,14 +6,14 @@ Run a **performance-focused** review: algorithmic complexity on hot paths, async
 
 This file is a [Cursor custom command](https://docs.cursor.com/context/commands): plain Markdown in `.cursor/commands/`. When the user runs `/review-performance` in chat, this content is sent as the prompt.
 
-- **Parameters:** Any text after `/review-performance` is scope—e.g. `/review-performance endpoints`, `/review-performance aiocache`, `/review-performance httpx`, `/review-performance retry/middleware`—narrow accordingly. If none given, assume full performance review (endpoints/core + caching + outbound I/O + middleware).
+- **Parameters:** Any text after `/review-performance` is scope—e.g. `/review-performance endpoints`, `/review-performance aiocache`, `/review-performance httpx2`, `/review-performance retry/middleware`—narrow accordingly. If none given, assume full performance review (endpoints/core + caching + outbound I/O + middleware).
 
 This command is project-scoped and works with @ mentions and Rules. For a full review use `/review` instead.
 
 ## Best practices alignment
 
 - **Hot-path efficiency** — Prefer O(n) or better in request-critical logic; avoid repeated list scans; avoid sorting inside handlers unless required.
-- **Async/event-loop safety** — `async def` paths must not perform blocking I/O (no `time.sleep`, sync file reads, sync network/DB calls); outbound calls use async clients and timeouts.
+- **Async/event-loop safety** — `async def` paths must not perform blocking I/O (no `time.sleep`, sync file reads, sync network/DB calls); outbound calls use the shared `httpx2.AsyncClient` and timeouts.
 - **Pydantic validation cost** — Validators are lightweight; avoid expensive computations in `model_validator`/field validators; keep DTOs minimal.
 - **Caching strategy (`aiocache`)** — Cache only when consistent/safe; choose correct cache keys + TTLs; prevent unbounded growth.
 - **Middleware cost** — Middleware (e.g. `GZipMiddleware`) is configured appropriately (thresholds match expected payload sizes) and does not add unnecessary per-request overhead.
@@ -28,7 +28,7 @@ Conduct a performance-only review. Inspect the following and call out violations
 
 ### Async I/O and blocking calls
 
-- **Checks:** `async def` paths must not perform blocking I/O (no `time.sleep`, sync file reads, or sync network/DB calls). Outbound HTTP uses `httpx` async with connection reuse and timeouts.
+- **Checks:** `async def` paths must not perform blocking I/O (no `time.sleep`, sync file reads, or sync network/DB calls). Outbound HTTP uses the shared `httpx2.AsyncClient` (connection reuse, HTTP/2, timeouts).
 
 ### Pydantic validation overhead
 
@@ -47,11 +47,12 @@ Conduct a performance-only review. Inspect the following and call out violations
 - Blocking calls inside `async def` handlers (sync IO/sleeps).
 - Heavy work inside Pydantic validators (CPU-heavy or outbound calls).
 - `aiocache` usage with missing TTL (effectively unbounded) or overly broad keys (collisions).
-- Outbound `httpx` requests without timeouts (hung requests / latency spikes).
+- Outbound `httpx2` requests without timeouts (hung requests / latency spikes).
+- Creating a new `httpx2.AsyncClient` per request instead of using `Depends(get_http_client)`.
 
 ## Steps
 
-1. **Gather scope** — Full performance review or a specific area (endpoints/core hot paths, Pydantic validation, `aiocache`, outbound `httpx`, retry/middleware). Default to full.
+1. **Gather scope** — Full performance review or a specific area (endpoints/core hot paths, Pydantic validation, `aiocache`, outbound `httpx2`, retry/middleware). Default to full.
 2. **Inspect hot paths** — reason about complexity and repeated work; validate limits/pagination.
 3. **Inspect async I/O** — identify blocking calls inside `async def`, ensure timeouts and connection reuse for outbound requests.
 4. **Inspect Pydantic validation overhead** — ensure validators are lightweight and DTOs are not excessively large/complex.

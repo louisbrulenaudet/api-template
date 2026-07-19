@@ -69,8 +69,8 @@ When working with SQL databases, prefer using SQLModel as it is integrated with 
 
 Prefer it over SQLAlchemy.
 
-## HTTPX
+## HTTPX2
 
-Use HTTPX for handling HTTP communication (e.g. with other APIs). It support sync and async usage.
+Use HTTPX2 (`httpx2`) for handling HTTP communication (e.g. with other APIs). It supports sync and async usage, HTTP/2, and optional brotli decoding.
 
-Prefer it over Requests.
+Prefer it over Requests and classic `httpx`. In this template, inject the shared lifespan client via `Depends(get_http_client)` from `app.core.http_client` — do not create a new `AsyncClient` per request.

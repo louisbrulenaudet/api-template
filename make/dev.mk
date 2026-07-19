@@ -1,4 +1,4 @@
-.PHONY: dev prod test sync sync-all check format type-check update pre-commit clean-venv install lock
+.PHONY: dev prod test sync sync-all check format type-check ci update pre-commit clean-venv install lock
 
 dev: ## Start development server
 	@echo "🚀 Starting development server..."
@@ -38,6 +38,9 @@ format: ## Format source code
 type-check: ## Type check the source code
 	@echo "🔍 Type checking the source code..."
 	uv run ty check .
+
+ci: format type-check ## Format + lint (Ruff) and type-check (ty); no tests
+	@echo "✅ CI gate passed (ruff + ty)"
 
 update: ## Update locked dependencies and apply
 	@echo "📡 Upgrading dependencies..."

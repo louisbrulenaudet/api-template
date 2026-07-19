@@ -4,7 +4,7 @@
 # sees uv, reducing the attack surface and image size.
 FROM python:3.14-slim AS builder
 
-COPY --from=ghcr.io/astral-sh/uv:0.11.3 /uv /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.11.29 /uv /bin/
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy

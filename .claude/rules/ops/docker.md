@@ -1,0 +1,22 @@
+---
+paths:
+  - "Dockerfile"
+  - "compose.yaml"
+  - "compose*.yml"
+  - ".dockerignore"
+  - "make/docker.mk"
+---
+
+# Docker
+
+## Build context
+
+[`.dockerignore`](../../../.dockerignore) uses an **allowlist**: everything excluded by default (`*`), then only paths the Dockerfile `COPY`s are re-included (`pyproject.toml`, `uv.lock`, `app/`).
+
+When adding a `COPY` to the Dockerfile, add the matching `!path` to `.dockerignore` in the same change.
+
+## Practices
+
+- Prefer Makefile targets (`make docker-build`, `make docker-run-dev`, …) over ad-hoc `docker` invocations in docs/agent workflows.
+- Do not bake secrets into images; pass via env / Compose / runtime secret stores.
+- Keep Logfire/telemetry disable flags consistent with local Makefile defaults unless explicitly enabling them.

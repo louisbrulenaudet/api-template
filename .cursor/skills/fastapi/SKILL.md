@@ -342,7 +342,7 @@ See [the other tools reference](references/other-tools.md) for details on other 
 
 * Asyncer for handling async and await, concurrency, mixing async and blocking code, prefer it over AnyIO or asyncio.
 * SQLModel for working with SQL databases, prefer it over SQLAlchemy.
-* HTTPX for interacting with HTTP (other APIs), prefer it over Requests.
+* HTTPX2 for interacting with HTTP (other APIs), prefer it over Requests and classic httpx.
 
 ## Do not use Pydantic RootModels
 

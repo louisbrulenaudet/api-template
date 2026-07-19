@@ -1,0 +1,3 @@
+# Gitignored files to copy into Claude Code / --worktree checkouts.
+# Do not list secrets you are unwilling to duplicate onto disk in worktrees.
+.env

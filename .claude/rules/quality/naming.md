@@ -1,0 +1,26 @@
+---
+paths:
+  - "app/**/*.py"
+  - "tests/**/*.py"
+---
+
+# Naming
+
+| Kind | Convention | Examples |
+|------|------------|----------|
+| Modules / packages | `snake_case` | `ping_response.py`, `error_codes.py` |
+| Functions / variables | `snake_case` | `get_settings`, `account_id` |
+| Classes | `PascalCase` | `CoreError`, `PingResponse` |
+| Constants | `UPPER_SNAKE_CASE` | `MAX_RETRIES` |
+| Enums | `PascalCase` class, `UPPER_SNAKE_CASE` members | `ErrorCodes.CLIENT_INITIALIZATION_ERROR` |
+| Env / settings fields | match `Settings` in `app/core/config.py` | `API_KEY`, `APP_NAME` |
+
+## DTOs and errors
+
+- Response/request models: `{Name}Response` / `{Name}Request` (e.g. `PingResponse`).
+- Exception classes: `{Name}Error` subclassing `CoreError`.
+- One public shape or enum per focused module when practical; re-export from package `__init__.py`.
+
+## Files outside Python
+
+- Markdown / rule / hook script names: `kebab-case`.
