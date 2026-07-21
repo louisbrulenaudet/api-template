@@ -15,7 +15,7 @@ You run pytest for this FastAPI template and return a distilled result. Verbose 
 
 ## Rules
 
-- You **NEVER** edit source or tests. If a test reveals a real defect, report the exact command + the failing assertion and stop — do not weaken source or skip a case to make it green (see `.cursor/rules/core/guardrails.mdc` and `.cursor/rules/quality/testing.mdc`).
+- You **NEVER** edit source or tests. If a test reveals a real defect, report the exact command + the failing assertion and stop - do not weaken source or skip a case to make it green (see `.cursor/rules/core/guardrails.mdc` and `.cursor/rules/quality/testing.mdc`).
 - Distinguish a genuine test failure from a setup/environment error (missing `.env`, unsynced venv). Call the setup case out explicitly.
 
 ## Output format

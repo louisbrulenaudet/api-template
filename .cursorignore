@@ -1,9 +1,9 @@
-# .cursorignore — HARD block (Agent, Tab, Inline Edit, @ mentions cannot access these).
+# .cursorignore - HARD block (Agent, Tab, Inline Edit, @ mentions cannot access these).
 # Purpose: keep secrets and never-touch runtime state completely out of any AI surface.
 #
 # Cursor already respects .gitignore and ships default ignores (lock files, env files,
 # build output, binaries, media, node_modules/, __pycache__/, .git/). This file only adds
-# what must be *blocked entirely*, not merely de-indexed — de-indexable noise lives in
+# what must be *blocked entirely*, not merely de-indexed - de-indexable noise lives in
 # .cursorindexingignore so the Agent can still open it on demand.
 #
 # Negation caveat (Cursor docs): `!` cannot re-include a file whose parent dir is excluded
@@ -33,7 +33,7 @@
 **/.netrc
 
 # ── Local agent-config overlays (gitignored; may carry API keys / personal tokens) ─────
-# .gitignore only de-indexes these; hard-block the Agent surface too — same defense-in-depth
+# .gitignore only de-indexes these; hard-block the Agent surface too - same defense-in-depth
 # rationale as the secrets above. (.cursorignore is Cursor-only, so this does not affect how
 # Claude Code loads its own settings.local.json / CLAUDE.local.md.)
 **/.claude/settings.local.json

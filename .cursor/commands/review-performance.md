@@ -1,22 +1,22 @@
 # Review performance command
 
-Run a **performance-focused** review: algorithmic complexity on hot paths, async I/O correctness (no blocking calls), Pydantic validation overhead, caching strategy (`aiocache`) usage, retry/timeout behavior, middleware cost (e.g. GZip), and memory growth risks. Your reply must be a **plan of suggested changes**: concise, actionable, and structured—not only prose.
+Run a **performance-focused** review: algorithmic complexity on hot paths, async I/O correctness (no blocking calls), Pydantic validation overhead, caching strategy (`aiocache`) usage, retry/timeout behavior, middleware cost (e.g. GZip), and memory growth risks. Your reply must be a **plan of suggested changes**: concise, actionable, and structured-not only prose.
 
 ## Cursor command usage
 
 This file is a [Cursor custom command](https://docs.cursor.com/context/commands): plain Markdown in `.cursor/commands/`. When the user runs `/review-performance` in chat, this content is sent as the prompt.
 
-- **Parameters:** Any text after `/review-performance` is scope—e.g. `/review-performance endpoints`, `/review-performance aiocache`, `/review-performance httpx2`, `/review-performance retry/middleware`—narrow accordingly. If none given, assume full performance review (endpoints/core + caching + outbound I/O + middleware).
+- **Parameters:** Any text after `/review-performance` is scope-e.g. `/review-performance endpoints`, `/review-performance aiocache`, `/review-performance httpx2`, `/review-performance retry/middleware`-narrow accordingly. If none given, assume full performance review (endpoints/core + caching + outbound I/O + middleware).
 
 This command is project-scoped and works with @ mentions and Rules. For a full review use `/review` instead.
 
 ## Best practices alignment
 
-- **Hot-path efficiency** — Prefer O(n) or better in request-critical logic; avoid repeated list scans; avoid sorting inside handlers unless required.
-- **Async/event-loop safety** — `async def` paths must not perform blocking I/O (no `time.sleep`, sync file reads, sync network/DB calls); outbound calls use the shared `httpx2.AsyncClient` and timeouts.
-- **Pydantic validation cost** — Validators are lightweight; avoid expensive computations in `model_validator`/field validators; keep DTOs minimal.
-- **Caching strategy (`aiocache`)** — Cache only when consistent/safe; choose correct cache keys + TTLs; prevent unbounded growth.
-- **Middleware cost** — Middleware (e.g. `GZipMiddleware`) is configured appropriately (thresholds match expected payload sizes) and does not add unnecessary per-request overhead.
+- **Hot-path efficiency** - Prefer O(n) or better in request-critical logic; avoid repeated list scans; avoid sorting inside handlers unless required.
+- **Async/event-loop safety** - `async def` paths must not perform blocking I/O (no `time.sleep`, sync file reads, sync network/DB calls); outbound calls use the shared `httpx2.AsyncClient` and timeouts.
+- **Pydantic validation cost** - Validators are lightweight; avoid expensive computations in `model_validator`/field validators; keep DTOs minimal.
+- **Caching strategy (`aiocache`)** - Cache only when consistent/safe; choose correct cache keys + TTLs; prevent unbounded growth.
+- **Middleware cost** - Middleware (e.g. `GZipMiddleware`) is configured appropriately (thresholds match expected payload sizes) and does not add unnecessary per-request overhead.
 
 ## Deep technical review
 
@@ -52,13 +52,13 @@ Conduct a performance-only review. Inspect the following and call out violations
 
 ## Steps
 
-1. **Gather scope** — Full performance review or a specific area (endpoints/core hot paths, Pydantic validation, `aiocache`, outbound `httpx2`, retry/middleware). Default to full.
-2. **Inspect hot paths** — reason about complexity and repeated work; validate limits/pagination.
-3. **Inspect async I/O** — identify blocking calls inside `async def`, ensure timeouts and connection reuse for outbound requests.
-4. **Inspect Pydantic validation overhead** — ensure validators are lightweight and DTOs are not excessively large/complex.
-5. **Inspect caching + retry utilities** — `aiocache` key/TTL correctness, and that retry behavior is not causing retry storms or latency spikes.
-6. **Inspect middleware cost** — validate GZip thresholds and that middleware ordering is intentional.
-7. **Compose plan** — Critical / Improvements / Optional; each item: **what**, **where**, **why**. One-line "no issues" per sub-area if none.
+1. **Gather scope** - Full performance review or a specific area (endpoints/core hot paths, Pydantic validation, `aiocache`, outbound `httpx2`, retry/middleware). Default to full.
+2. **Inspect hot paths** - reason about complexity and repeated work; validate limits/pagination.
+3. **Inspect async I/O** - identify blocking calls inside `async def`, ensure timeouts and connection reuse for outbound requests.
+4. **Inspect Pydantic validation overhead** - ensure validators are lightweight and DTOs are not excessively large/complex.
+5. **Inspect caching + retry utilities** - `aiocache` key/TTL correctness, and that retry behavior is not causing retry storms or latency spikes.
+6. **Inspect middleware cost** - validate GZip thresholds and that middleware ordering is intentional.
+7. **Compose plan** - Critical / Improvements / Optional; each item: **what**, **where**, **why**. One-line "no issues" per sub-area if none.
 
 ## Checklist
 

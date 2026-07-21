@@ -51,11 +51,12 @@ dev = [
     "pytest-asyncio>=1.3.0",
     "pytest-cov>=7.0.0",
     "ruff>=0.15.6",
-    "ty>=0.0.23",
+    "ty>=0.0.58",
 ]
 
 [tool.uv]
 package = false
+required-version = ">=0.11.28"
 exclude-newer = "7 days"
 # httpx2 sits on the outbound critical path; allow current releases past the 7-day
 # freshness gate so security/perf fixes (e.g. 2.7.0) are lockable immediately.
@@ -128,51 +129,85 @@ select = [
     "PLW",
     # pydocstyle
     "D",
+    # perflint (performance anti-patterns)
+    "PERF",
+    # flake8-use-pathlib (prefer pathlib over os.path)
+    "PTH",
+    # flynt (implicit string joins -> f-strings)
+    "FLY",
+    # flake8-tidy-imports (ban relative imports; see [tool.ruff.lint.flake8-tidy-imports])
+    "TID",
+    # flake8-no-pep420 (no implicit namespace packages)
+    "INP",
+    # flake8-unused-arguments
+    "ARG",
+    # flake8-self (no private-member access)
+    "SLF",
+    # pygrep-hooks (no blanket noqa / no unspecified type: ignore)
+    "PGH",
+    # mccabe (cyclomatic complexity; see [tool.ruff.lint.mccabe])
+    "C90",
 ]
 ignore = [
+    # Line length is the formatter's job; E501 only fires on strings/comments it
+    # cannot wrap (long docstrings, URLs) - advisory here, not a hard failure.
     "E501",
-    "S104",
+    # Allow long literal messages passed straight to exceptions (flake8-errmsg is off).
     "TRY003",
-    "ISC001",
-    "ISC002",
-    "COM812",
+    # Application code, not a published library: missing docstrings are acceptable.
     "D100",
     "D101",
     "D102",
     "D103",
     "D104",
+    # Magic-value comparisons read fine in app code (HTTP codes, retry counts, ...).
     "PLR2004",
+    # Formatter compatibility - the Ruff formatter owns these; keeping them off avoids
+    # conflicts. https://docs.astral.sh/ruff/formatter/#conflicting-lint-rules
+    "W191",
+    "E111",
+    "E114",
+    "E117",
+    "D206",
+    "D300",
+    "COM812",
+    "ISC001",
+    "ISC002",
 ]
 fixable = ["ALL"]
 unfixable = []
 
 [tool.ruff.lint.per-file-ignores]
-"**/{tests,docs}/*" = [
+# Tests: allow missing annotations/docstrings, `assert`, unused fixture args,
+# private-member access, module-level import placement, and non-package dirs.
+# pytest-style checks (PT) intentionally stay ENABLED here.
+"tests/**" = [
     "ANN",
-    "E402",
-    "S101",
-    "PT",
-    "TRY",
+    "ARG",
     "D",
+    "E402",
+    "INP",
+    "S101",
+    "SLF",
+    "TRY",
 ]
 
 [tool.ruff]
-fix = true
+# No `fix = true`: auto-fix stays opt-in (`ruff check --fix`) so a bare `ruff check`
+# in CI reports violations instead of silently fixing them and exiting 0.
 target-version = "py314"
 line-length = 100
 indent-width = 4
-
-[tool.pyright]
-typeCheckingMode = "standard"
-exclude = [
-    "**/tests"
-]
+required-version = ">=0.15.6"
+# Ruff already excludes .venv/.git/.ruff_cache/.pytest_cache/build/dist by default;
+# extend (do not replace) that list with generated coverage/site output.
+extend-exclude = ["htmlcov", "site"]
 
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
 skip-magic-trailing-comma = false
-line-ending = "auto"
+line-ending = "lf"
 docstring-code-format = true
 
 [tool.ruff.lint.isort]
@@ -204,12 +239,30 @@ max-statements = 50
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
+[tool.ruff.lint.flake8-tidy-imports]
+# Enforce absolute imports from `app.*` (matches the documented import convention).
+ban-relative-imports = "all"
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
 [tool.ty.environment]
 root = ["."]
 
 [tool.ty.src]
 include = ["app", "tests"]
 respect-ignore-files = true
+
+[tool.ty.terminal]
+error-on-warning = true
+
+[tool.ty.rules]
+possibly-missing-import = "error"
+possibly-missing-attribute = "error"
+missing-type-argument = "error"
+blanket-ignore-comment = "error"
+division-by-zero = "error"
+missing-override-decorator = "error"
 
 [tool.coverage.run]
 branch = true

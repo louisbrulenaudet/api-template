@@ -84,7 +84,7 @@ This project avoids the FastAPI Cloud CLI stack (`fastapi-cloud-cli` / `sentry-s
    make sync
    ```
 
-   (`make install` is an alias for `sync`. The `dev` optional extra matches CI: `uv sync --locked --extra dev`.)
+   (`make install` is an alias for `sync`. `make sync` runs `uv sync --frozen` - it installs `uv.lock` exactly; the `dev` dependency group is included by default, matching CI.)
 
 2. **Configure environment:**
 
@@ -107,7 +107,7 @@ This project avoids the FastAPI Cloud CLI stack (`fastapi-cloud-cli` / `sentry-s
    make docker-run-dev
    ```
 
-   `--watch` syncs edits under `app/` into the running container (instant reload) and rebuilds the image when `pyproject.toml` / `uv.lock` change — no bind mount needed. The app is published on **127.0.0.1:8000** on the host (loopback only), matching `make dev`. Use [http://127.0.0.1:8000](http://127.0.0.1:8000) or `localhost` from the same machine.
+   `--watch` syncs edits under `app/` into the running container (instant reload) and rebuilds the image when `pyproject.toml` / `uv.lock` change - no bind mount needed. The app is published on **127.0.0.1:8000** on the host (loopback only), matching `make dev`. Use [http://127.0.0.1:8000](http://127.0.0.1:8000) or `localhost` from the same machine.
 
    If you want to set values explicitly in YAML (not recommended for real secrets), you can use:
 
@@ -142,11 +142,12 @@ The following Makefile commands are available for development, formatting, testi
 |------------------------|---------------------------------------------|
 | `make dev`             | Run development server with hot reloading   |
 | `make test`            | Run the test suite with coverage            |
-| `make sync`            | Sync `.venv` from `uv.lock` (includes `dev` extra) |
-| `make sync-all`        | Sync with all optional extras                |
+| `make sync`            | Sync `.venv` from `uv.lock` (`--frozen`; `dev` group) |
+| `make sync-all`        | Sync all dependency groups from `uv.lock`   |
 | `make install`         | Alias for `make sync`                       |
 | `make lock`            | Lock project dependencies                   |
 | `make update`         | Update locked deps (`uv lock --upgrade` + sync) |
+| `make export-requirements` | Regenerate `requirements.txt` from `uv.lock` |
 | `make clean-venv`      | Remove local `.venv`                        |
 | `make type-check`      | Type check the source code using Ty         |
 | `make check`           | Run code quality checks (Ruff linting)      |
@@ -171,9 +172,9 @@ The following Makefile commands are available for development, formatting, testi
 | `make docker-tunnel-logs`     | Follow Cloudflare Tunnel logs                |
 | `make docker-tunnel-stop`     | Stop Cloudflare Tunnel (keeps app)           |
 
-The [`Dockerfile`](Dockerfile) exposes two targets: `runtime` (uvicorn, dependencies only—what CI builds) and `reload` (same dependency set as `runtime`, but runs `fastapi dev` with reload for local Compose). Optional `[dev]` extras (pytest, ruff, etc.) are for local/CI tooling, not installed in the image.
+The [`Dockerfile`](Dockerfile) exposes two targets: `runtime` (uvicorn, dependencies only-what CI builds) and `reload` (same dependency set as `runtime`, but runs `fastapi dev` with reload for local Compose). Optional `[dev]` extras (pytest, ruff, etc.) are for local/CI tooling, not installed in the image.
 
-The [`.dockerignore`](.dockerignore) uses an **allowlist** strategy: everything is excluded by default (`*`) and only the three paths the Dockerfile actually copies are re-included — `pyproject.toml`, `uv.lock`, and `app/`. This keeps the build context minimal and ensures any file added to the repository in the future is automatically excluded without requiring a `.dockerignore` update.
+The [`.dockerignore`](.dockerignore) uses an **allowlist** strategy: everything is excluded by default (`*`) and only the three paths the Dockerfile actually copies are re-included - `pyproject.toml`, `uv.lock`, and `app/`. This keeps the build context minimal and ensures any file added to the repository in the future is automatically excluded without requiring a `.dockerignore` update.
 
 ## Best Practices
 

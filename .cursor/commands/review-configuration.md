@@ -1,24 +1,24 @@
 # Review Configuration Command
 
-Run a **configuration-focused** review: environment and secrets handling, Docker/Compose + uv lockfile parity, Pydantic settings contract, Ruff configuration, and dev/prod wiring consistency. Your reply must be a **plan of suggested changes**: concise, actionable, and structured—not only prose.
+Run a **configuration-focused** review: environment and secrets handling, Docker/Compose + uv lockfile parity, Pydantic settings contract, Ruff configuration, and dev/prod wiring consistency. Your reply must be a **plan of suggested changes**: concise, actionable, and structured-not only prose.
 
 ## Cursor command usage
 
 This file is a [Cursor custom command](https://docs.cursor.com/context/commands): plain Markdown in `.cursor/commands/`. When the user runs `/review-configuration` in chat, this content is sent as the prompt.
 
-- **Parameters:** Any text after `/review-configuration` is scope—e.g. `/review-configuration env only`, `/review-configuration docker`, `/review-configuration ruff/pydantic`, `/review-configuration ports/healthcheck`—narrow accordingly. If none given, assume all configuration (env/secrets, Docker/Compose, uv/Ruff/Pydantic, build modes, parity).
+- **Parameters:** Any text after `/review-configuration` is scope-e.g. `/review-configuration env only`, `/review-configuration docker`, `/review-configuration ruff/pydantic`, `/review-configuration ports/healthcheck`-narrow accordingly. If none given, assume all configuration (env/secrets, Docker/Compose, uv/Ruff/Pydantic, build modes, parity).
 
 This command is project-scoped and works with @ mentions and Rules. For a full review use `/review` instead.
 
 ## Best practices alignment
 
-- **Secrets** — Never committed and never embedded into build artifacts. Secrets should flow via `.env` / Compose environment only. `.env.template` must be placeholder-only.
-- **Environment** — Clear split between:
+- **Secrets** - Never committed and never embedded into build artifacts. Secrets should flow via `.env` / Compose environment only. `.env.template` must be placeholder-only.
+- **Environment** - Clear split between:
   - required runtime values (defined in `app/core/config.py`): `APP_NAME`, `API_KEY`, `API_CLIENT`
   - operational values (ports/host used by server + docker): `8000` for local dev expectations, `8001` for production/container expectations
   - optional tuning values (only if present in code; ensure they are documented in `.env.template`)
-- **Ruff/typing parity** — Single source of truth at `pyproject.toml` (Ruff rules). Make sure Docker installs runtime deps deterministically via `uv sync --frozen --no-dev` and does not depend on dev-only tooling.
-- **Docker/runtime parity** — Local `make dev` behavior (port 8000) should match container runtime behavior (Docker `CMD`/`HEALTHCHECK`, port 8001) so config changes don’t “work locally but fail in Docker”.
+- **Ruff/typing parity** - Single source of truth at `pyproject.toml` (Ruff rules). Make sure Docker installs runtime deps deterministically via `uv sync --frozen --no-dev` and does not depend on dev-only tooling.
+- **Docker/runtime parity** - Local `make dev` behavior (port 8000) should match container runtime behavior (Docker `CMD`/`HEALTHCHECK`, port 8001) so config changes don’t “work locally but fail in Docker”.
 
 Align with root `AGENTS.md` for environment and port allocation guidance.
 
@@ -127,12 +127,12 @@ Conduct a configuration-only review. Inspect the following and call out violatio
 
 ## Steps
 
-1. **Gather scope** — Full configuration review or narrower scope if parameters are provided.
-2. **Inspect env and secrets** — `.env.template`, `.env` usage in `compose.yaml`, `.gitignore`, `.dockerignore`, and env consumption in `app/core/config.py` and `app/main.py`.
-3. **Inspect Docker/Compose alignment** — `Dockerfile` + `compose.yaml` + HEALTHCHECK + port consistency.
-4. **Inspect Ruff + Pydantic settings** — `pyproject.toml` (Ruff config) and `app/core/config.py` (Pydantic Settings contract).
-5. **Inspect build modes and reproducibility** — `uv.lock` and frozen installs (`uv sync --frozen --no-dev`).
-6. **Compose plan** — Output **Critical / Improvements / Optional** with **what/where/why** and a one-line “no issues” statement for any sub-area with no findings.
+1. **Gather scope** - Full configuration review or narrower scope if parameters are provided.
+2. **Inspect env and secrets** - `.env.template`, `.env` usage in `compose.yaml`, `.gitignore`, `.dockerignore`, and env consumption in `app/core/config.py` and `app/main.py`.
+3. **Inspect Docker/Compose alignment** - `Dockerfile` + `compose.yaml` + HEALTHCHECK + port consistency.
+4. **Inspect Ruff + Pydantic settings** - `pyproject.toml` (Ruff config) and `app/core/config.py` (Pydantic Settings contract).
+5. **Inspect build modes and reproducibility** - `uv.lock` and frozen installs (`uv sync --frozen --no-dev`).
+6. **Compose plan** - Output **Critical / Improvements / Optional** with **what/where/why** and a one-line “no issues” statement for any sub-area with no findings.
 
 ## Checklist
 
@@ -168,9 +168,8 @@ If context is insufficient, suggest which config files or `@file` references to 
 
 Respond with a **plan only** (no implementation unless the user asks):
 
-1. **Critical** — Must-fix (severe configuration issues that break CI/build/runtime or weaken correctness/security).
-2. **Improvements** — Worthwhile (documentation of env contract, clearer Ruff/Pydantic rules, compatibility/parity tweaks).
-3. **Optional** — Nice-to-haves (minor tidy and comments). Prefix with **Nit:** for non-blocking polish.
+1. **Critical** - Must-fix (severe configuration issues that break CI/build/runtime or weaken correctness/security).
+2. **Improvements** - Worthwhile (documentation of env contract, clearer Ruff/Pydantic rules, compatibility/parity tweaks).
+3. **Optional** - Nice-to-haves (minor tidy and comments). Prefix with **Nit:** for non-blocking polish.
 
 For each item: **what** to change, **where** (file/area), and **why**. If a sub-area has no findings, state it in one line.
-

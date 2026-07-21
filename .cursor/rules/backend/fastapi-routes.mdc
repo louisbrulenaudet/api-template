@@ -1,5 +1,5 @@
 ---
-description: FastAPI route rules — Pydantic path/query/body validation, thin handlers, CoreError, response models
+description: FastAPI route rules - Pydantic path/query/body validation, thin handlers, CoreError, response models
 globs: app/api/**/*.py
 alwaysApply: false
 ---
@@ -10,15 +10,15 @@ API handlers live under `app/api/`. Load the `fastapi` skill for current FastAPI
 
 ## Validation at the boundary
 
-- Validate **every** path, query, and body input with Pydantic / FastAPI params — not bare untyped values for API inputs.
+- Validate **every** path, query, and body input with Pydantic / FastAPI params - not bare untyped values for API inputs.
 - Prefer `Annotated[..., Path()]`, `Annotated[..., Query()]`, `Annotated[..., Body()]` (or a dedicated request model) with constraints and descriptions.
 - Declare return types and/or `response_model=` so OpenAPI stays accurate.
 
 ```python
-# ❌ BAD — unvalidated query bag
+# ❌ BAD - unvalidated query bag
 async def list_items(limit: int = 10, q: str = ""): ...
 
-# ✅ GOOD — constrained, documented params
+# ✅ GOOD - constrained, documented params
 async def list_items(
     limit: Annotated[int, Query(ge=1, le=100)] = 10,
     q: Annotated[str, Query(max_length=200)] = "",

@@ -46,7 +46,7 @@ case "$BASE" in
     ;;
 esac
 
-BLOCK_MSG="Blocked: refusing to read a secret file ($BASE). Secrets must not enter the model context — see .cursor/rules/core/guardrails.mdc. Use .env.template for non-secret examples."
+BLOCK_MSG="Blocked: refusing to read a secret file ($BASE). Secrets must not enter the model context - see .cursor/rules/core/guardrails.mdc. Use .env.template for non-secret examples."
 
 # Match common secret filenames and key material.
 case "$BASE" in

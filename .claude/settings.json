@@ -63,29 +63,25 @@
       "Read(**/.git/**)",
       "Read(**/.claude/settings.local.json)",
       "Edit(**/.venv/**)",
-      "Write(**/.venv/**)",
       "Edit(**/__pycache__/**)",
-      "Write(**/__pycache__/**)",
       "Edit(**/.ruff_cache/**)",
-      "Write(**/.ruff_cache/**)",
       "Edit(**/.pytest_cache/**)",
-      "Write(**/.pytest_cache/**)",
       "Edit(**/htmlcov/**)",
-      "Write(**/htmlcov/**)",
       "Edit(**/.coverage)",
-      "Write(**/.coverage)",
       "Edit(**/.coverage.*)",
-      "Write(**/.coverage.*)",
       "Edit(**/node_modules/**)",
-      "Write(**/node_modules/**)",
       "Edit(**/.git/**)",
-      "Write(**/.git/**)",
-      "Edit(**/uv.lock)",
-      "Write(**/uv.lock)"
+      "Edit(**/uv.lock)"
     ],
     "ask": [
       "Bash(git push:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(gh repo delete:*)",
+      "Bash(gh secret set:*)",
+      "Bash(gh secret delete:*)",
+      "Bash(gh release create:*)",
+      "Bash(gh release delete:*)",
+      "Bash(gh pr merge:*)"
     ]
   },
   "hooks": {
@@ -154,7 +150,17 @@
   "sandbox": {
     "enabled": true,
     "autoAllowBashIfSandboxed": true,
-    "allowUnsandboxedCommands": false
+    "allowUnsandboxedCommands": false,
+    "filesystem": {
+      "allowWrite": ["~/.cache/uv", "~/.local/share/uv"]
+    },
+    "credentials": {
+      "files": [
+        { "path": "~/.ssh", "mode": "deny" },
+        { "path": "~/.aws", "mode": "deny" },
+        { "path": "~/.netrc", "mode": "deny" }
+      ]
+    }
   },
   "worktree": {
     "sparsePaths": [
@@ -165,6 +171,10 @@
       "make"
     ],
     "symlinkDirectories": [".venv"]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "sh \"$CLAUDE_PROJECT_DIR/.claude/status-line.sh\""
   },
   "preferredNotifChannel": "terminal_bell",
   "spinnerTipsEnabled": false,

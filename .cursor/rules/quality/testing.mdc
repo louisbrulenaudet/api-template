@@ -1,5 +1,5 @@
 ---
-description: pytest conventions — trust boundaries, narrow runs, never weaken source for green tests
+description: pytest conventions - trust boundaries, narrow runs, never weaken source for green tests
 globs: tests/**,**/conftest.py
 alwaysApply: false
 ---

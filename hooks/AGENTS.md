@@ -64,7 +64,7 @@ Paths in config files are **relative to the repo root** (e.g. `hooks/git/guard-s
 
 ## Authoring Conventions
 
-- **Shebang**: `#!/usr/bin/env sh` — POSIX shell; `jq` optional with `sed` fallback.
+- **Shebang**: `#!/usr/bin/env sh` - POSIX shell; `jq` optional with `sed` fallback.
 - **Project root**: `ROOT="${CURSOR_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-.}}"`
 - **JSON input**: read stdin; support Claude (`.tool_input.*`) and Cursor (flat `command` / `file_path`).
 - **Cursor allow/deny**: git and security guards always print `{"permission":"allow"}` or `{"permission":"deny",...}` on stdout so `failClosed: true` never sees empty output.
@@ -97,7 +97,7 @@ Paths in config files are **relative to the repo root** (e.g. `hooks/git/guard-s
 
 ## Contribution
 
-- Edit scripts only under `hooks/` — do not duplicate under `.cursor/hooks/` or `.claude/hooks/`.
+- Edit scripts only under `hooks/` - do not duplicate under `.cursor/hooks/` or `.claude/hooks/`.
 - When adding a hook, update [`.cursor/hooks.json`](../.cursor/hooks.json), [`.claude/settings.json`](../.claude/settings.json) (if applicable), [README.md](README.md), and this file.
 - Align new guards with [guardrails](../.cursor/rules/core/guardrails.mdc); never weaken secret or destructive-git protection without explicit user approval.
 - `chmod +x` new scripts before committing.

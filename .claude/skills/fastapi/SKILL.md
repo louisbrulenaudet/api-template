@@ -7,14 +7,14 @@ description: FastAPI best practices for this api-template. Use when writing or r
 
 Best-practice FastAPI patterns for this api-template. Pair with `.claude/rules/backend/fastapi-routes.md`
 (path-scoped route rules) and the `pydantic-best-practices` skill for models. The Cursor twin lives at
-`.cursor/skills/fastapi/SKILL.md` — keep the two in sync when updating either.
+`.cursor/skills/fastapi/SKILL.md` - keep the two in sync when updating either.
 
 ## Essentials for this repo
 
-- Validate path/query/body with `Annotated[..., Path|Query|Body]` or request models — never leave API inputs loosely typed.
+- Validate path/query/body with `Annotated[..., Path|Query|Body]` or request models - never leave API inputs loosely typed.
 - Return DTOs from `app/dtos/`; keep handlers thin; resolve config via `Depends` + `get_settings` from `app/core/config.py`.
 - Raise `CoreError` subclasses (`app/exceptions/`) for domain failures; the global handler maps status codes.
-- Inject the shared lifespan `httpx2.AsyncClient` via `Depends(get_http_client)` from `app.core.http_client` — never create a per-request client.
+- Inject the shared lifespan `httpx2.AsyncClient` via `Depends(get_http_client)` from `app.core.http_client` - never create a per-request client.
 - Prefer Context7 / `docs-researcher` for version-sensitive FastAPI API questions over training memory.
 - Finish with `make check` and the affected pytest modules.
 

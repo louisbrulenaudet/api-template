@@ -5,7 +5,7 @@
   "tasks": [
     {
       "label": "dev: FastAPI (hot reload)",
-      "detail": "make dev — uv run fastapi dev on :8000",
+      "detail": "make dev - uv run fastapi dev on :8000",
       "type": "shell",
       "command": "make dev",
       "isBackground": true,
@@ -15,7 +15,7 @@
     },
     {
       "label": "ci: gate (ruff + ty)",
-      "detail": "make ci — ruff format + lint --fix, then ty check (pre-PR gate)",
+      "detail": "make ci - ruff format + lint --fix, then ty check (pre-PR gate)",
       "type": "shell",
       "command": "make ci",
       "group": { "kind": "build", "isDefault": true },
@@ -39,7 +39,7 @@
     },
     {
       "label": "lint: ruff check",
-      "detail": "make check — uv run ruff check .",
+      "detail": "make check - uv run ruff check .",
       "type": "shell",
       "command": "make check",
       "group": "build",
@@ -63,7 +63,7 @@
     },
     {
       "label": "format: ruff format + fix",
-      "detail": "make format — ruff format . && ruff check . --fix",
+      "detail": "make format - ruff format . && ruff check . --fix",
       "type": "shell",
       "command": "make format",
       "group": "build",
@@ -87,7 +87,7 @@
     },
     {
       "label": "type-check: ty",
-      "detail": "make type-check — uv run ty check .",
+      "detail": "make type-check - uv run ty check .",
       "type": "shell",
       "command": "make type-check",
       "group": "build",
@@ -97,7 +97,7 @@
     },
     {
       "label": "test: pytest + coverage",
-      "detail": "make test — uv run pytest (coverage → term + htmlcov/)",
+      "detail": "make test - uv run pytest (coverage → term + htmlcov/)",
       "type": "shell",
       "command": "make test",
       "group": { "kind": "test", "isDefault": true },
@@ -107,7 +107,7 @@
     },
     {
       "label": "pre-commit: all files",
-      "detail": "make pre-commit — uv run pre-commit run --all-files",
+      "detail": "make pre-commit - uv run pre-commit run --all-files",
       "type": "shell",
       "command": "make pre-commit",
       "group": "build",
@@ -117,7 +117,7 @@
     },
     {
       "label": "deps: sync (uv)",
-      "detail": "make sync — uv sync (locked, dev group; matches CI)",
+      "detail": "make sync - uv sync (locked, dev group; matches CI)",
       "type": "shell",
       "command": "make sync",
       "presentation": { "reveal": "always", "panel": "shared" },
@@ -126,7 +126,7 @@
     },
     {
       "label": "deps: lock (uv)",
-      "detail": "make lock — uv lock",
+      "detail": "make lock - uv lock",
       "type": "shell",
       "command": "make lock",
       "presentation": { "reveal": "always", "panel": "shared" },
@@ -135,7 +135,7 @@
     },
     {
       "label": "docker: build",
-      "detail": "make docker-build — docker compose build",
+      "detail": "make docker-build - docker compose build",
       "type": "shell",
       "command": "make docker-build",
       "presentation": { "reveal": "always", "panel": "shared", "clear": true },
@@ -144,7 +144,7 @@
     },
     {
       "label": "docker: up + watch",
-      "detail": "make docker-run-dev — docker compose up --watch app (:8000)",
+      "detail": "make docker-run-dev - docker compose up --watch app (:8000)",
       "type": "shell",
       "command": "make docker-run-dev",
       "isBackground": true,
@@ -154,7 +154,7 @@
     },
     {
       "label": "docker: down",
-      "detail": "make docker-stop — docker compose down",
+      "detail": "make docker-stop - docker compose down",
       "type": "shell",
       "command": "make docker-stop",
       "presentation": { "reveal": "always", "panel": "shared" },
@@ -163,7 +163,7 @@
     },
     {
       "label": "docker: logs",
-      "detail": "make docker-logs — docker compose logs -f",
+      "detail": "make docker-logs - docker compose logs -f",
       "type": "shell",
       "command": "make docker-logs",
       "isBackground": true,

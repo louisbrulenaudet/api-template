@@ -1,5 +1,5 @@
 ---
-description: Docker build + Compose conventions — multi-stage uv build, allowlist .dockerignore, non-root, no secrets in images, compose hardening + watch, Makefile targets
+description: Docker build + Compose conventions - multi-stage uv build, allowlist .dockerignore, non-root, no secrets in images, compose hardening + watch, Makefile targets
 globs: Dockerfile*,.dockerignore,compose*.yaml,compose*.yml,docker-compose*.yml,make/docker.mk
 alwaysApply: false
 ---
@@ -24,13 +24,15 @@ only what the Dockerfile `COPY`s (`pyproject.toml`, `uv.lock`, `app/`).
 ## Image build (multi-stage + uv)
 
 - **Multi-stage.** `uv` lives only in the `builder` stage; `runtime` copies the finished
-  `/app/.venv` and contains no `uv` or build tooling — smaller image and attack surface.
+  `/app/.venv` and contains no `uv` or build tooling - smaller image and attack surface.
   Copy the venv with `COPY --link` for better cross-build cache reuse.
-- **Install.** `RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked --no-dev`.
-  Use `--locked` (fails on lock drift; matches CI) — not `--frozen` (bootstrap only).
+- **Install.** `RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev`.
+  Use `--frozen` (installs `uv.lock` exactly, no re-resolve; matches CI) - not `--locked`,
+  because the relative `exclude-newer` window makes `--locked` re-resolution drift over time.
+  Locking happens only in `uv lock` / `make lock`.
 - **uv env.** `UV_COMPILE_BYTECODE=1`, `UV_LINK_MODE=copy` (cache mount is a different fs),
   `UV_PYTHON_DOWNLOADS=0` (use the base image's Python). `[tool.uv] package = false`
-  here, so `uv sync` installs dependencies only — copy `app/` separately as source.
+  here, so `uv sync` installs dependencies only - copy `app/` separately as source.
 - **Pin bases.** Pin the Python base and the `ghcr.io/astral-sh/uv` tag by version;
   digest-pin (`@sha256:…`) for full reproducibility in production. Never `:latest`.
 - **Non-root.** Fixed-UID user (`useradd -r -u 10001 … -s /sbin/nologin -M`); set `USER`
@@ -41,13 +43,13 @@ only what the Dockerfile `COPY`s (`pyproject.toml`, `uv.lock`, `app/`).
 ## Healthchecks
 
 - Each servable stage's `HEALTHCHECK` must target the port that stage serves. `runtime`
-  serves 8001, `reload` serves 8000 — `reload` **overrides** the inherited check (a stage
+  serves 8001, `reload` serves 8000 - `reload` **overrides** the inherited check (a stage
   that changes the port but keeps an 8001 check reports unhealthy). `--start-interval`
   speeds up start-period detection.
 
 ## Secrets
 
-- Never put secrets in `ENV`/`ARG` — they persist in image layers and `docker history`.
+- Never put secrets in `ENV`/`ARG` - they persist in image layers and `docker history`.
   Use `RUN --mount=type=secret,id=…` at build time, and Compose `secrets:` / `env_file`
   (`.env`, git-ignored) at runtime.
 
@@ -58,7 +60,7 @@ only what the Dockerfile `COPY`s (`pyproject.toml`, `uv.lock`, `app/`).
   `pids_limit`, `deploy.resources.limits` (cpus/memory), `logging` size caps, `init: true`,
   and `read_only: true` + `tmpfs` where the workload allows. Publish ports to loopback
   (`127.0.0.1:…`).
-- **Hot reload:** `develop.watch` — `sync` app source, `rebuild` on `pyproject.toml`/`uv.lock`.
+- **Hot reload:** `develop.watch` - `sync` app source, `rebuild` on `pyproject.toml`/`uv.lock`.
   Run via `docker compose up --watch` (`make docker-run-dev`). `read_only` is relaxed on the
   watch-sync dev service (sync writes into the container); the production image stays read-only.
 - **Startup order:** `depends_on: { <svc>: { condition: service_healthy } }`.

@@ -5,7 +5,7 @@ services:
     # API container for local development (Dockerfile target `reload`: hot reload,
     # same dependency set as `runtime`).
     # - Loads configuration from `.env` (do not commit secrets).
-    # - Live-reloads via Compose `develop.watch` below — no bind mount needed.
+    # - Live-reloads via Compose `develop.watch` below - no bind mount needed.
     build:
       context: .
       dockerfile: Dockerfile
@@ -15,7 +15,7 @@ services:
     # reloader subprocess).
     init: true
     ports:
-      # Bind to loopback only — prevents accidental exposure on all interfaces,
+      # Bind to loopback only - prevents accidental exposure on all interfaces,
       # which would bypass host firewall rules (e.g. UFW).
       - "127.0.0.1:8000:8000"
     env_file:
@@ -24,7 +24,7 @@ services:
     environment:
       LOGFIRE_SEND_TO_LOGFIRE: "false"
       LOGFIRE_PYDANTIC_PLUGIN_RECORD: "off"
-    # Alternative (explicit) configuration — keep secrets out of version control:
+    # Alternative (explicit) configuration - keep secrets out of version control:
     # environment:
     #   APP_NAME: "Backend"
     #   API_KEY: "your_api_key_here"
@@ -33,7 +33,7 @@ services:
     # NOTE: `read_only: true` is intentionally NOT set on this dev service because
     # `develop.watch` (action: sync) writes changed source into /app/app inside the
     # container, which a read-only rootfs would block. The production `runtime`
-    # image needs no writable rootfs — enforce `read_only: true` in prod. /tmp is
+    # image needs no writable rootfs - enforce `read_only: true` in prod. /tmp is
     # still capped and isolated via tmpfs below.
     tmpfs:
       - /tmp:size=64m,mode=1777
@@ -106,7 +106,7 @@ services:
       - 8.8.8.8
     environment:
       - TUNNEL_TOKEN=${TUNNEL_TOKEN}
-    # Hardening — cloudflared makes only outbound connections: it needs no Linux
+    # Hardening - cloudflared makes only outbound connections: it needs no Linux
     # capabilities and no writable rootfs.
     read_only: true
     tmpfs:

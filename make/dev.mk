@@ -1,56 +1,65 @@
-.PHONY: dev prod test sync sync-all check format type-check ci update pre-commit clean-venv install lock
+.PHONY: dev prod test sync sync-all check format type-check ci update pre-commit clean-venv install lock export-requirements
+
+# Convention: routine commands run against uv.lock exactly via `--frozen` (install
+# from the lock, never re-resolve). The lock changes ONLY on explicit re-locking
+# (`make lock` / `make update` / `uv add`), where the relative `exclude-newer`
+# freshness gate is applied. This keeps every other command deterministic.
 
 dev: ## Start development server
 	@echo "🚀 Starting development server..."
-	uv run fastapi dev $(APP) --port $(DEV_PORT)
+	uv run --frozen fastapi dev $(APP) --port $(DEV_PORT)
 
 prod: ## Start production server
 	@echo "🚀 Starting production server..."
-	uv run fastapi run $(APP) --port $(PORT)
+	uv run --frozen fastapi run $(APP) --port $(PORT)
 
 test: ## Run tests
 	@echo "🧪 Running tests..."
-	uv run pytest
+	uv run --frozen pytest
 
-sync: ## Install/sync dependencies (uv.lock + dev group; matches CI)
-	@echo "📦 Syncing project environment..."
-	uv sync
+sync: ## Install from uv.lock exactly (--frozen; dev group included; matches CI)
+	@echo "📦 Syncing project environment (frozen)..."
+	uv sync --frozen
 
-sync-all: ## Sync with all optional extras from pyproject.toml
-	@echo "📦 Syncing project environment with all extras..."
-	uv sync --all-extras
+sync-all: ## Sync every dependency group from uv.lock (--frozen)
+	@echo "📦 Syncing project environment with all dependency groups..."
+	uv sync --frozen --all-groups
 
 install: sync ## Install project dependencies (alias for sync)
 
-lock: ## Lock project dependencies
+lock: ## Re-resolve and write uv.lock (applies the exclude-newer freshness gate)
 	@echo "📦 Locking project dependencies..."
 	uv lock
 
 check: ## Run code quality checks
 	@echo "🔍 Running code analysis..."
-	uv run ruff check .
+	uv run --frozen ruff check .
 
 format: ## Format source code
 	@echo "🔧 Formatting code..."
-	uv run ruff format .
-	uv run ruff check . --fix
+	uv run --frozen ruff format .
+	uv run --frozen ruff check . --fix
 
 type-check: ## Type check the source code
 	@echo "🔍 Type checking the source code..."
-	uv run ty check .
+	uv run --frozen ty check .
 
 ci: format type-check ## Format + lint (Ruff) and type-check (ty); no tests
 	@echo "✅ CI gate passed (ruff + ty)"
 
-update: ## Update locked dependencies and apply
+update: ## Upgrade locked dependencies, then install them
 	@echo "📡 Upgrading dependencies..."
 	uv lock --upgrade
-	uv sync
+	uv sync --frozen
 	@echo "✅ Dependencies updated successfully"
+
+export-requirements: ## Regenerate requirements.txt from uv.lock (pip-style export; uv.lock stays canonical)
+	@echo "📤 Exporting requirements.txt from uv.lock..."
+	uv export --frozen --no-hashes -o requirements.txt
 
 clean-venv: ## Remove local Python virtual environment (.venv)
 	@echo "🧹 Removing virtual environment..."
 	rm -rf .venv
 
 pre-commit: ## Run pre-commit checks
-	uv run pre-commit run --all-files
+	uv run --frozen pre-commit run --all-files

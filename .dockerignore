@@ -4,11 +4,11 @@
 # changes to this file.
 *
 
-# builder stage — uv sync --locked --no-dev
+# builder stage - uv sync --frozen --no-dev
 !pyproject.toml
 !uv.lock
 
-# runtime stage — application source
+# runtime stage - application source
 !app/
 !app/**
 

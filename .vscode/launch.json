@@ -62,7 +62,7 @@
       ]
     },
     {
-      // Not F5-launchable — this wires the Test Explorer / gutter "Debug Test"
+      // Not F5-launchable - this wires the Test Explorer / gutter "Debug Test"
       // button (coverage already stripped via python.testing.pytestArgs).
       "name": "Pytest: debug from Test Explorer",
       "type": "debugpy",

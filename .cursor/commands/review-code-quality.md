@@ -1,41 +1,41 @@
 # Review Code Quality Command
 
-Run a **code-quality-focused** review: naming conventions, strict type hints, Ruff lint/format compliance, Pydantic v2 usage, duplication/readability, CoreError/error-handling patterns, async/await correctness, and testability. Your reply must be a **plan of suggested changes**: concise, actionable, and structured—not only prose.
+Run a **code-quality-focused** review: naming conventions, strict type hints, Ruff lint/format compliance, Pydantic v2 usage, duplication/readability, CoreError/error-handling patterns, async/await correctness, and testability. Your reply must be a **plan of suggested changes**: concise, actionable, and structured-not only prose.
 
 ## Cursor command usage
 
 This file is a [Cursor custom command](https://docs.cursor.com/context/commands): plain Markdown in `.cursor/commands/`. When the user runs `/review-code-quality` in chat, this content is sent as the prompt.
 
-- **Parameters:** Any text after `/review-code-quality` is scope—e.g. `/review-code-quality naming`, `/review-code-quality types`, `/review-code-quality errors`, `/review-code-quality async`, `/review-code-quality tests`—narrow accordingly. If none given, assume full code quality review for this repo (`app/` + `tests/`).
+- **Parameters:** Any text after `/review-code-quality` is scope-e.g. `/review-code-quality naming`, `/review-code-quality types`, `/review-code-quality errors`, `/review-code-quality async`, `/review-code-quality tests`-narrow accordingly. If none given, assume full code quality review for this repo (`app/` + `tests/`).
 
 This command is project-scoped and works with @ mentions and Rules. For a full review use `/review` instead.
 
 ## Best practices alignment
 
-- **Naming & conventions** — Follow root conventions in `AGENTS.md`:
+- **Naming & conventions** - Follow root conventions in `AGENTS.md`:
   - variables and functions: `snake_case`
   - classes: `PascalCase`
   - constants: `UPPER_SNAKE_CASE`
   - enum names: `PascalCase`
   - enum members: `UPPER_SNAKE_CASE`
   - avoid single-letter names except trivial loop indices
-- **Type hints** — Python 3.12+ with comprehensive type hints:
+- **Type hints** - Python 3.12+ with comprehensive type hints:
   - annotate every function parameter and return type
   - avoid `Any` unless justified and documented
   - prefer precise types over broad unions when possible
-- **Ruff (lint + format)** — Formatting and lint enforced via Ruff:
+- **Ruff (lint + format)** - Formatting and lint enforced via Ruff:
   - no unused imports/variables
   - consistent style with Ruff formatter and `pyproject.toml`
   - do not leave debug prints or logs in production paths
-- **Structure** — Single responsibility per file/function where practical:
+- **Structure** - Single responsibility per file/function where practical:
   - keep endpoint handlers focused on transport (Pydantic validation and response models)
   - keep business logic in `app/core/*` and reusable helpers in `app/utils/*`
   - errors extend the `CoreError` hierarchy
-- **Errors** — App-specific errors should extend `CoreError`:
+- **Errors** - App-specific errors should extend `CoreError`:
   - avoid generic `Exception` throws in domain/I/O paths when an app error exists
   - ensure exception handler returns JSON-safe error details
   - log only safe/sanitized details
-- **Duplication and dead code** — Remove copy/paste blocks and dead imports; avoid magic strings for finite sets by using enums/constants.
+- **Duplication and dead code** - Remove copy/paste blocks and dead imports; avoid magic strings for finite sets by using enums/constants.
 
 Align with root `AGENTS.md` as the source of truth for conventions and patterns.
 
@@ -147,14 +147,14 @@ Explicitly look for these categories and propose better alternatives:
 
 ## Steps
 
-1. **Gather scope** — Full code quality review or a narrower scope if parameters are provided.
-2. **Inspect naming and exports** — Verify conventions for all public identifiers and module boundaries.
-3. **Inspect type hints** — Look for missing annotations, overly broad types, and drift from DTO definitions.
-4. **Inspect Ruff formatting/lint** — Unused imports/vars, formatting consistency, and complexity hotspots.
-5. **Inspect Pydantic DTO correctness** — Ensure response models match return values and validators are safe.
-6. **Inspect duplication and structure** — DRY, readability, and file/function sizes.
-7. **Inspect error handling and async correctness** — CoreError hierarchy, JSON-safe error serialization/logging, and blocking I/O risks.
-8. **Compose plan** — Output **Critical / Improvements / Optional**; each item must specify **what**, **where**, and **why**. Include a one-line “no issues” statement for any sub-area with no findings.
+1. **Gather scope** - Full code quality review or a narrower scope if parameters are provided.
+2. **Inspect naming and exports** - Verify conventions for all public identifiers and module boundaries.
+3. **Inspect type hints** - Look for missing annotations, overly broad types, and drift from DTO definitions.
+4. **Inspect Ruff formatting/lint** - Unused imports/vars, formatting consistency, and complexity hotspots.
+5. **Inspect Pydantic DTO correctness** - Ensure response models match return values and validators are safe.
+6. **Inspect duplication and structure** - DRY, readability, and file/function sizes.
+7. **Inspect error handling and async correctness** - CoreError hierarchy, JSON-safe error serialization/logging, and blocking I/O risks.
+8. **Compose plan** - Output **Critical / Improvements / Optional**; each item must specify **what**, **where**, and **why**. Include a one-line “no issues” statement for any sub-area with no findings.
 
 ## Checklist
 
@@ -186,4 +186,3 @@ Respond with a **plan** only (no implementation unless the user asks):
 3. **Optional** – Nice-to-haves (shorter functions, barrel cleanup). Prefix with **Nit:** for non-blocking polish.
 
 For each item: **what** to change, **where** (file/area), and **why**. If a sub-area has no findings, state it in one line.
-
