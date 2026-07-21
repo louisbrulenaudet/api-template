@@ -83,12 +83,6 @@
   "explorer.sortOrder": "foldersNestsFiles",
   "explorer.fileNesting.enabled": true,
   "explorer.fileNesting.expand": false,
-  "explorer.fileNesting.patterns": {
-    "pyproject.toml": "uv.lock, requirements.txt, .python-version, .pre-commit-config.yaml, ruff.toml, .ruff.toml, ty.toml",
-    "Dockerfile": ".dockerignore, .containerignore, compose.yaml, compose.*.yaml",
-    ".env.template": ".env, .env.*",
-    "README.md": "AGENTS.md, CLAUDE.md, LICENSE, CITATION.cff, CODE_OF_CONDUCT.md, CONTRIBUTING.md, SECURITY.md, CHANGELOG.md"
-  },
   "git.autofetch": true,
   "git.branchProtection": ["main", "master"],
   "cSpell.enabled": true,
