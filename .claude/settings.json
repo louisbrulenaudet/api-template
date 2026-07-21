@@ -144,7 +144,17 @@
   "sandbox": {
     "enabled": true,
     "autoAllowBashIfSandboxed": true,
-    "allowUnsandboxedCommands": false
+    "allowUnsandboxedCommands": false,
+    "filesystem": {
+      "allowWrite": ["~/.cache/uv", "~/.local/share/uv"]
+    },
+    "credentials": {
+      "files": [
+        { "path": "~/.ssh", "mode": "deny" },
+        { "path": "~/.aws", "mode": "deny" },
+        { "path": "~/.netrc", "mode": "deny" }
+      ]
+    }
   },
   "worktree": {
     "sparsePaths": [
