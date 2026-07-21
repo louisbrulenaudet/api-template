@@ -1,4 +1,4 @@
-# EditorConfig — cross-editor baseline aligned with Ruff ([tool.ruff] in pyproject.toml).
+# EditorConfig - cross-editor baseline aligned with Ruff ([tool.ruff] in pyproject.toml).
 # https://editorconfig.org · honored in VS Code via the editorconfig.editorconfig extension.
 root = true
 

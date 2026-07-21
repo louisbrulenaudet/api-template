@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Purpose: Lint a Python file right after an agent edits it and feed problems back.
+# Purpose: Apply safe lint autofixes to an edited Python file, then feed remaining problems back.
 # Target: called by check-changed.sh after Cursor afterFileEdit or Claude Edit|Write.
 # Canonical location: hooks/quality/ - wired from .cursor/hooks.json and .claude/settings.json.
 #
@@ -33,7 +33,9 @@ elif command -v ruff >/dev/null 2>&1; then
 fi
 [ -z "$RUFF_CMD" ] && exit 0
 
-if OUT=$($RUFF_CMD check "$FILE" 2>&1); then
+# --fix is passed explicitly (rather than via [tool.ruff] fix=true) so a bare
+# `ruff check` in CI still reports violations instead of silently fixing them.
+if OUT=$($RUFF_CMD check --fix "$FILE" 2>&1); then
   exit 0
 fi
 

@@ -10,7 +10,7 @@ Configuration lives in `app/core/config.py` via Pydantic Settings.
 ## Rules
 
 - Required secrets and identifiers come from the environment (`.env` locally; never commit `.env`).
-- Keep `.env.template` in sync when adding/removing settings fields — without real secret values.
+- Keep `.env.template` in sync when adding/removing settings fields - without real secret values.
 - Fail closed on missing required config (let Settings validation raise), do not invent silent defaults for secrets.
 - `@lru_cache(maxsize=1)` belongs only on `get_settings()`. Do not add unbounded `lru_cache` on user-keyed or async helpers.
 - For async TTL caches use aiocache (configured in app lifespan), not `lru_cache`.

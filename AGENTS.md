@@ -1,6 +1,6 @@
 # api-template Agent Instructions
 
-Lean always-on map for Cursor and Claude Code. Path-specific conventions live in `.cursor/rules/` and `.claude/rules/` — load those when editing matching files. Deep FastAPI/Pydantic guidance lives in skills under `.cursor/skills/` / `.claude/skills/`.
+Lean always-on map for Cursor and Claude Code. Path-specific conventions live in `.cursor/rules/` and `.claude/rules/` - load those when editing matching files. Deep FastAPI/Pydantic guidance lives in skills under `.cursor/skills/` / `.claude/skills/`.
 
 ## Overview
 
@@ -27,9 +27,9 @@ Path rules: `backend/fastapi-routes`, `contracts/pydantic-dtos`, `quality/*`, `o
 ## Setup
 
 ```sh
-make sync                          # uv sync --locked --extra dev (same idea as CI)
+make sync                          # uv sync --frozen - installs uv.lock as-is; dev group included (matches CI)
 cp .env.template .env              # fill API_KEY, API_CLIENT, …
-make dev                           # http://localhost:8000 — ping: /api/v1/ping
+make dev                           # http://localhost:8000 - ping: /api/v1/ping
 ```
 
 Required env (see `app/core/config.py`): `APP_NAME` (default `Backend`), `API_KEY`, `API_CLIENT`.
@@ -38,7 +38,7 @@ Required env (see `app/core/config.py`): `APP_NAME` (default `Backend`), `API_KE
 
 | Command | Purpose |
 |---------|---------|
-| `make sync` / `make install` | Sync `.venv` from `uv.lock` (+ dev extra) |
+| `make sync` / `make install` | Sync `.venv` from `uv.lock` (`--frozen`; dev group) |
 | `make lock` / `make update` | Lock / upgrade dependencies |
 | `make dev` / `make prod` | Dev (8000) / prod (8001) servers |
 | `make check` / `make format` | Ruff lint / format (+ `--fix` on format) |
@@ -50,12 +50,12 @@ Required env (see `app/core/config.py`): `APP_NAME` (default `Backend`), `API_KE
 
 ## Critical gotchas
 
-- **CORS** defaults to allow-all origins for local template use — **restrict in production**.
+- **CORS** defaults to allow-all origins for local template use - **restrict in production**.
 - **`get_settings()`** is `@lru_cache(maxsize=1)`. Tests that change env must call `get_settings.cache_clear()`.
 - **`lru_cache`** only on `get_settings()`; use **aiocache** for async TTL caches (configured in app lifespan).
 - **Outbound HTTP** uses a shared lifespan-scoped `httpx2.AsyncClient` on `app.state.http_client` (`app/core/http_client.py`); inject via `Depends(get_http_client)`. Do not create per-request clients.
 - **Docker build context** is an allowlist in `.dockerignore` (`*` then `!pyproject.toml`, `!uv.lock`, `!app/`). New `COPY` paths need a matching `!` entry.
-- **Do not hand-edit `uv.lock`** — use `make lock` / `uv lock`.
+- **Do not hand-edit `uv.lock`** - use `make lock` / `uv lock`.
 - **Logfire** send/plugin flags stay off via Makefile / Docker / CI unless explicitly enabled.
 - **Never commit `.env`**, keys, or credentials. Agent hooks block secret staging/reads and destructive git when wired.
 - Prefer **`CoreError`** subclasses + `ErrorCodes` for domain failures; DTO modules hold shapes only.
@@ -86,11 +86,11 @@ Keep `.cursor/rules` and `.claude/rules` content in sync when changing conventio
 | Claude `permissions.deny` `Read(...)` | Excludes from discovery, search, and reads | Same noise/secrets for Claude Code |
 | `.worktreeinclude` | Copies listed gitignored files into Claude worktrees | Local `.env` for worktree DX |
 
-Do not put index-only noise in `.cursorignore` — that over-blocks the Agent. Optional Context7 API key stays in user MCP / local overlay — never commit it.
+Do not put index-only noise in `.cursorignore` - that over-blocks the Agent. Optional Context7 API key stays in user MCP / local overlay - never commit it.
 
 ## Finish gate
 
-Before considering work done: `make ci` for Ruff + ty, and run the narrowest relevant tests when behavior changes (`make test` or `uv run pytest …`). Do not silence lint/type/test failures — fix the cause (see `core/guardrails`).
+Before considering work done: `make ci` for Ruff + ty, and run the narrowest relevant tests when behavior changes (`make test` or `uv run pytest …`). Do not silence lint/type/test failures - fix the cause (see `core/guardrails`).
 
 ## Contribution
 

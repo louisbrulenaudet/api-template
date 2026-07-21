@@ -25,4 +25,5 @@ def test_client_initialization_error():
     assert isinstance(err, CoreError)
     assert err.message == "The client initialization failed."
     assert err.code == ErrorCodes.CLIENT_INITIALIZATION_ERROR
-    assert isinstance(err.details, str) and "fail" in err.details
+    assert isinstance(err.details, str)
+    assert "fail" in err.details

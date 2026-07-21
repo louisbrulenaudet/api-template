@@ -14,7 +14,7 @@ export HELP_HEADER
 
 define HELP_EXAMPLES
 $(WHITE)Examples:$(RESET)
-    make sync          # Sync venv from uv.lock (includes dev extra)
+    make sync          # Sync venv from uv.lock (--frozen; dev group)
     make dev           # Start development server
     make test          # Execute test suite
 

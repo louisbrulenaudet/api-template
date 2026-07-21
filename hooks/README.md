@@ -67,7 +67,7 @@ Both read JSON on **stdin** and support Claude (`tool_input.*`) and Cursor (flat
 | **sessionStart** (Cursor only) | `logging/session-start.sh` | Append to `logs/session-start.log` |
 | **InstructionsLoaded** (Claude only) | `logging/instructions-loaded.sh` | Append to `logs/instructions-loaded.log` |
 
-Exit code **2** blocks a pre-shell or pre-read action. On a post-edit event it only feeds the error back to the agent; it cannot roll back the completed edit. Cursor security guards set `failClosed: true` so crashes, timeouts, and invalid output do not bypass them — scripts therefore always print `{"permission":"allow"}` on the allow path.
+Exit code **2** blocks a pre-shell or pre-read action. On a post-edit event it only feeds the error back to the agent; it cannot roll back the completed edit. Cursor security guards set `failClosed: true` so crashes, timeouts, and invalid output do not bypass them - scripts therefore always print `{"permission":"allow"}` on the allow path.
 
 ## Manual test (before wiring)
 

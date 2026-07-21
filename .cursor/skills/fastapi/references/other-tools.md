@@ -73,4 +73,4 @@ Prefer it over SQLAlchemy.
 
 Use HTTPX2 (`httpx2`) for handling HTTP communication (e.g. with other APIs). It supports sync and async usage, HTTP/2, and optional brotli decoding.
 
-Prefer it over Requests and classic `httpx`. In this template, inject the shared lifespan client via `Depends(get_http_client)` from `app.core.http_client` — do not create a new `AsyncClient` per request.
+Prefer it over Requests and classic `httpx`. In this template, inject the shared lifespan client via `Depends(get_http_client)` from `app.core.http_client` - do not create a new `AsyncClient` per request.

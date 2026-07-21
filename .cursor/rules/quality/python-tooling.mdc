@@ -1,5 +1,5 @@
 ---
-description: uv/Ruff/ty/Makefile as single tooling source of truth — no hand-edited lockfiles
+description: uv/Ruff/ty/Makefile as single tooling source of truth - no hand-edited lockfiles
 globs: pyproject.toml,uv.lock,Makefile,make/**
 alwaysApply: false
 ---
@@ -10,9 +10,11 @@ Single source of truth for tool config: `pyproject.toml`. Do not fork Ruff / ty 
 
 ## Package management
 
-- Canonical lockfile: `uv.lock`. Use `make sync`, `make lock`, `make update` — never hand-edit the lock.
-- Dev tools come from the `dev` extra (`uv sync --locked --extra dev`), matching CI.
-- `requirements.txt` is an optional export only; `uv.lock` wins.
+- Canonical lockfile: `uv.lock`. Use `make sync`, `make lock`, `make update` - never hand-edit the lock.
+- **Installs use `--frozen`** (`make sync`, CI, Docker): install `uv.lock` exactly, no re-resolution. Deliberate - `exclude-newer = "7 days"` is a *relative* window, so `--locked` would re-resolve against a sliding cutoff and drift. Locking (and the freshness gate) happens only in `uv lock` / `make lock` / `make update`. Trade-off: installs don't auto-detect an un-relocked `pyproject.toml` edit - run `make lock` after changing dependencies.
+- Dev tooling (pytest, Ruff, ty, pre-commit) is the PEP 735 `[dependency-groups] dev` group, synced **by default** (no `--extra`/`--group` flag; there are no `[project.optional-dependencies]`).
+- `[tool.uv] required-version` pins the uv floor (matches the CI/Docker pin); `.python-version` pins the dev/CI interpreter within `requires-python`.
+- `requirements.txt` is an optional export only (`make export-requirements`); `uv.lock` wins.
 
 ## Quality commands
 

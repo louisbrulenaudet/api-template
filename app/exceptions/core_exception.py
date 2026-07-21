@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, override
 
 from app.enums.error_codes import ErrorCodes
 
@@ -46,6 +46,7 @@ class CoreError(Exception):
         self.code = code
         self.details = details
 
+    @override
     def __str__(self) -> str:
         """Return a string representation of the error, including the message, code, and optional details.
 

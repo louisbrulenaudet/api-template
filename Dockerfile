@@ -19,16 +19,18 @@ ENV PATH="/app/.venv/bin:$PATH"
 
 COPY pyproject.toml uv.lock /app/
 
-# --locked fails the build if uv.lock is stale vs pyproject.toml (matches CI);
-# --frozen is for workspace bootstrap only. The cache mount persists uv's downloads.
+# --frozen installs uv.lock exactly, without re-resolving - deterministic and
+# immune to the relative `exclude-newer` window (which would make --locked drift
+# as the window slides). Locking happens only via `uv lock` / `make lock`. The
+# cache mount persists uv's downloads across builds.
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-dev
+    uv sync --frozen --no-dev
 
 FROM python:3.14-slim AS runtime
 
 # PYTHONDONTWRITEBYTECODE: suppress runtime .pyc writes (uv pre-compiled at build).
 # PYTHONUNBUFFERED: flush stdout/stderr immediately (visible in `docker logs`).
-# PYTHONHASHSEED: unpredictable seed — mitigates hash-flooding attacks.
+# PYTHONHASHSEED: unpredictable seed - mitigates hash-flooding attacks.
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONHASHSEED=random \

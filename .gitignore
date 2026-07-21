@@ -194,11 +194,11 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
-# Claude Code — personal / local overlays (team config is committed)
+# Claude Code - personal / local overlays (team config is committed)
 CLAUDE.local.md
 .claude/settings.local.json
 
-# Claude Code worktree checkouts (--worktree / subagent isolation) — never commit
+# Claude Code worktree checkouts (--worktree / subagent isolation) - never commit
 .claude/worktrees/
 
 # Agent hook runtime logs (shared Cursor + Claude)

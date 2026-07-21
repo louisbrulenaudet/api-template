@@ -1,19 +1,19 @@
 # Review Architecture Command
 
-Run an **architecture-focused** review of this repo: layout and layering, dependency direction, module coupling/cohesion, and build pipeline boundaries. Your reply must be a **plan of suggested changes**: concise, actionable, and structured—not only prose.
+Run an **architecture-focused** review of this repo: layout and layering, dependency direction, module coupling/cohesion, and build pipeline boundaries. Your reply must be a **plan of suggested changes**: concise, actionable, and structured-not only prose.
 
 ## Cursor command usage
 
 This file is a [Cursor custom command](https://docs.cursor.com/context/commands): plain Markdown in `.cursor/commands/`. When the user runs `/review-architecture` in chat, this content is sent as the prompt.
 
-- **Parameters:** Any text after `/review-architecture` is additional scope—e.g. `/review-architecture endpoints wiring`, `/review-architecture error handling`, `/review-architecture Docker/compose parity`—narrow the review accordingly. If none given, assume full architecture review for this repo.
+- **Parameters:** Any text after `/review-architecture` is additional scope-e.g. `/review-architecture endpoints wiring`, `/review-architecture error handling`, `/review-architecture Docker/compose parity`-narrow the review accordingly. If none given, assume full architecture review for this repo.
 
 This command is project-scoped and works with @ mentions and Rules. For broader reviews use `/review` instead.
 
 ## Best practices alignment
 
-- **Dependency direction** — Endpoints (HTTP) depend on core logic; core logic depends on dtos/enums/errors/utils; utils are as independent as possible (prefer “leaf” utilities).
-- **Single responsibility** — Each module has one clear purpose:
+- **Dependency direction** - Endpoints (HTTP) depend on core logic; core logic depends on dtos/enums/errors/utils; utils are as independent as possible (prefer “leaf” utilities).
+- **Single responsibility** - Each module has one clear purpose:
   - `app/api/v1/endpoints/*`: FastAPI route handlers (HTTP wiring only)
   - `app/api/v1/router.py`: API router composition (`include_router`)
   - `app/main.py`: FastAPI app wiring (middleware, router include, global exception handler)
@@ -22,9 +22,9 @@ This command is project-scoped and works with @ mentions and Rules. For broader 
   - `app/enums/*`: Stable enums (e.g. `ErrorCodes`)
   - `app/exceptions/*`: `CoreError` subclasses + domain/I/O error types
   - `app/utils/*`: Small reusable helpers (e.g. `retry`, `async_retry`)
-- **Public API surface** — Use Python package exports (`__all__`, `__init__.py`) to define what is public; avoid fragile deep imports across internal modules.
-- **Cohesion and coupling** — Avoid “god” files; keep domain logic out of endpoints; avoid core modules importing unrelated HTTP-layer details.
-- **Build pipeline boundaries** — Ensure Docker runtime entrypoints, ports, and healthcheck routes match the app wiring and local scripts.
+- **Public API surface** - Use Python package exports (`__all__`, `__init__.py`) to define what is public; avoid fragile deep imports across internal modules.
+- **Cohesion and coupling** - Avoid “god” files; keep domain logic out of endpoints; avoid core modules importing unrelated HTTP-layer details.
+- **Build pipeline boundaries** - Ensure Docker runtime entrypoints, ports, and healthcheck routes match the app wiring and local scripts.
 
 Align with root `AGENTS.md` for architectural expectations and conventions.
 
@@ -107,13 +107,13 @@ This repo is a single Python package (no monorepo workspaces). Instead:
 
 ## Steps
 
-1. **Gather scope** — Full architecture review, or narrow scope based on `/review-architecture <scope>`.
-2. **Inspect layout and layering** — Verify module responsibilities in `app/`.
-3. **Inspect dependency direction** — Trace imports across `app/api/`, `app/core/`, `app/utils/`, `app/exceptions/`, `app/dtos/`, `app/enums/`.
-4. **Inspect exports** — Ensure public surface is minimal and stable (prefer explicit `__all__` over deep imports).
-5. **Inspect build pipeline** — Compare `Dockerfile`, `compose.yaml`, and Makefile targets for parity (ports, entrypoints, healthcheck paths).
-6. **Review cohesion/coupling hotspots** — Identify any “god modules” (common candidates: `app/main.py`, `app/core/config.py`).
-7. **Compose plan** — Critical / Improvements / Optional; each item must specify **what**, **where**, **why**. If a sub-area has no findings, state it in one line.
+1. **Gather scope** - Full architecture review, or narrow scope based on `/review-architecture <scope>`.
+2. **Inspect layout and layering** - Verify module responsibilities in `app/`.
+3. **Inspect dependency direction** - Trace imports across `app/api/`, `app/core/`, `app/utils/`, `app/exceptions/`, `app/dtos/`, `app/enums/`.
+4. **Inspect exports** - Ensure public surface is minimal and stable (prefer explicit `__all__` over deep imports).
+5. **Inspect build pipeline** - Compare `Dockerfile`, `compose.yaml`, and Makefile targets for parity (ports, entrypoints, healthcheck paths).
+6. **Review cohesion/coupling hotspots** - Identify any “god modules” (common candidates: `app/main.py`, `app/core/config.py`).
+7. **Compose plan** - Critical / Improvements / Optional; each item must specify **what**, **where**, **why**. If a sub-area has no findings, state it in one line.
 
 ## Checklist
 
@@ -152,4 +152,3 @@ Respond with a **plan only** (no implementation unless the user asks):
 3. **Optional** – Nice-to-haves (minor refactors, documentation, small module renames). Prefix with **Nit:** for non-blocking polish.
 
 For each item: **what** to change, **where** (file/area), and **why**. If a sub-area has no findings, state it in one line.
-

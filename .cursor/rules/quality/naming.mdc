@@ -1,5 +1,5 @@
 ---
-description: Python naming — snake_case, PascalCase, DTO and ErrorCodes conventions
+description: Python naming - snake_case, PascalCase, DTO and ErrorCodes conventions
 globs: app/**/*.py,tests/**/*.py
 alwaysApply: false
 ---

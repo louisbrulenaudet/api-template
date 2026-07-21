@@ -14,11 +14,11 @@ After a batch of Python edits, run `make check` (and `make format` if you change
 
 ## Style
 
-- Double quotes, spaces, line length 88 (Ruff defaults in `pyproject.toml`).
+- Double quotes, spaces, line length 100 (`[tool.ruff]` in `pyproject.toml`).
 - Strict type hints on all function parameters and return types.
 - Prefer explicit over clever; keep functions focused and under ~50 lines when practical.
 - No floating work: always `await` async calls or return the coroutine to the caller.
-- Thin route handlers — business logic lives in `app/core/` or dedicated service modules, not in endpoint files.
+- Thin route handlers - business logic lives in `app/core/` or dedicated service modules, not in endpoint files.
 
 ## Imports
 

@@ -1,4 +1,4 @@
-# .cursorindexingignore — SOFT exclude (search/index only). Files stay openable by the Agent
+# .cursorindexingignore - SOFT exclude (search/index only). Files stay openable by the Agent
 # and @-mentions on demand; they're just kept out of codebase search & embeddings so they don't
 # dilute retrieval quality.
 #
@@ -7,9 +7,9 @@
 # thing worth listing here is a file that is COMMITTED (indexed by default) yet noisy to embed.
 # In this repo that is the dependency lockfile. Everything the previous version also listed
 # (htmlcov/, dist/, build/, *.egg-info/, coverage.*, *.log, *.png …) is already gitignored or
-# default-ignored — re-listing it was dead weight.
+# default-ignored - re-listing it was dead weight.
 
-# ── Committed dependency lock — readable for audits, noisy to index/embed ──────
+# ── Committed dependency lock - readable for audits, noisy to index/embed ──────
 uv.lock
 
 # ── Template hook: if your fork COMMITS generated artifacts Cursor would otherwise index

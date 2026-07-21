@@ -9,7 +9,7 @@ Official Pydantic performance skill. Apply when writing new models or reviewing 
 
 ## Prefer `model_validate_json()` over `model_validate(json.loads(...))`
 
-`model_validate(json.loads(...))` parses JSON in Python, converts to a dict, then validates. `model_validate_json()` validates directly from the raw JSON string inside Rust — skip the intermediate dict entirely.
+`model_validate(json.loads(...))` parses JSON in Python, converts to a dict, then validates. `model_validate_json()` validates directly from the raw JSON string inside Rust - skip the intermediate dict entirely.
 
 ```python
 import json
@@ -210,7 +210,7 @@ _bool_list_adapter = TypeAdapter(Annotated[list[bool], FailFast()])
 try:
     _bool_list_adapter.validate_python([True, 'invalid', False, 'also invalid'])
 except ValidationError as exc:
-    # Only the first error is reported — stops after 'invalid'
+    # Only the first error is reported - stops after 'invalid'
     print(exc)
 ```
 

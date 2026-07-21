@@ -40,15 +40,15 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --locked
+        run: uv sync --frozen
 
       - parallel:
           - name: Run lint with ruff
-            run: uv run --locked ruff check .
+            run: uv run --frozen ruff check .
           - name: Run type check with ty
-            run: uv run --locked ty check .
+            run: uv run --frozen ty check . --output-format github
           - name: Run tests with pytest
-            run: uv run --locked pytest -q
+            run: uv run --frozen pytest -q
 
   docker-build:
     name: Build runtime image

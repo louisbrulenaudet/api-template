@@ -7,18 +7,18 @@ description: Pydantic v2 performance and contract practices for this api-templat
 
 Pydantic v2 performance + contract practices for this api-template. Pair with
 `.claude/rules/contracts/pydantic-dtos.md`. The Cursor twin lives at
-`.cursor/skills/pydantic-best-practices/SKILL.md` — keep the two in sync when updating either.
+`.cursor/skills/pydantic-best-practices/SKILL.md` - keep the two in sync when updating either.
 
 ## Essentials for this repo
 
-- One owner per wire shape under `app/dtos/` / `app/enums/` — no duplicate mirrors (guardrails: "one source of truth").
+- One owner per wire shape under `app/dtos/` / `app/enums/` - no duplicate mirrors (guardrails: "one source of truth").
 - No business logic in DTO modules; keep `Field` descriptions OpenAPI-friendly and client-safe (no secrets / PII).
-- Settings live in `app/core/config.py`; never commit real secrets — sync `.env.template` only.
+- Settings live in `app/core/config.py`; never commit real secrets - sync `.env.template` only.
 - Use `docs-researcher` / Context7 for version-sensitive Pydantic questions.
 
 ## Prefer `model_validate_json()` over `model_validate(json.loads(...))`
 
-`model_validate(json.loads(...))` parses JSON in Python, converts to a dict, then validates. `model_validate_json()` validates directly from the raw JSON string inside Rust — skip the intermediate dict entirely.
+`model_validate(json.loads(...))` parses JSON in Python, converts to a dict, then validates. `model_validate_json()` validates directly from the raw JSON string inside Rust - skip the intermediate dict entirely.
 
 ```python
 import json
@@ -219,7 +219,7 @@ _bool_list_adapter = TypeAdapter(Annotated[list[bool], FailFast()])
 try:
     _bool_list_adapter.validate_python([True, 'invalid', False, 'also invalid'])
 except ValidationError as exc:
-    # Only the first error is reported — stops after 'invalid'
+    # Only the first error is reported - stops after 'invalid'
     print(exc)
 ```
 
