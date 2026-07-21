@@ -165,6 +165,7 @@
     "logfire",
     "louisbrulenaudet",
     "Makefiles",
+    "marimo",
     "markupsafe",
     "maxfail",
     "Mcpjson",
@@ -231,6 +232,7 @@
     "venv",
     "venvs",
     "watchfiles",
-    "worktree"
+    "worktree",
+    "worktrees"
   ]
 }

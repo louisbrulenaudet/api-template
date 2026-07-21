@@ -198,6 +198,9 @@ cython_debug/
 CLAUDE.local.md
 .claude/settings.local.json
 
+# Claude Code worktree checkouts (--worktree / subagent isolation) — never commit
+.claude/worktrees/
+
 # Agent hook runtime logs (shared Cursor + Claude)
 hooks/logs/
 
