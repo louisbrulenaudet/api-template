@@ -27,13 +27,27 @@
       "WebFetch(domain:docs.astral.sh)",
       "WebFetch(domain:docs.pytest.org)",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:www.uvicorn.org)"
+      "WebFetch(domain:www.uvicorn.org)",
+      "WebFetch(domain:claude.com)",
+      "WebFetch(domain:docs.python.org)",
+      "WebFetch(domain:www.starlette.io)"
     ],
     "deny": [
+      "Bash(rm -rf *)",
+      "Bash(sudo *)",
       "Read(**/.env)",
       "Read(**/.env.*)",
       "Read(**/*.pem)",
       "Read(**/*.key)",
+      "Read(**/*.crt)",
+      "Read(**/*.p12)",
+      "Read(**/*.pfx)",
+      "Read(**/*.keystore)",
+      "Read(**/id_rsa)",
+      "Read(**/id_ed25519)",
+      "Read(**/credentials.json)",
+      "Read(**/.pypirc)",
+      "Read(**/.netrc)",
       "Read(**/.venv/**)",
       "Read(**/__pycache__/**)",
       "Read(**/.ruff_cache/**)",
@@ -45,6 +59,9 @@
       "Read(**/dist/**)",
       "Read(**/build/**)",
       "Read(**/hooks/logs/**)",
+      "Read(**/node_modules/**)",
+      "Read(**/.git/**)",
+      "Read(**/.claude/settings.local.json)",
       "Edit(**/.venv/**)",
       "Write(**/.venv/**)",
       "Edit(**/__pycache__/**)",
@@ -58,9 +75,18 @@
       "Edit(**/.coverage)",
       "Write(**/.coverage)",
       "Edit(**/.coverage.*)",
-      "Write(**/.coverage.*)"
+      "Write(**/.coverage.*)",
+      "Edit(**/node_modules/**)",
+      "Write(**/node_modules/**)",
+      "Edit(**/.git/**)",
+      "Write(**/.git/**)",
+      "Edit(**/uv.lock)",
+      "Write(**/uv.lock)"
     ],
-    "ask": []
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(git commit:*)"
+    ]
   },
   "hooks": {
     "PreToolUse": [
@@ -118,7 +144,6 @@
   },
   "enabledPlugins": {
     "security-guidance@claude-plugins-official": true,
-    "context7@claude-plugins-official": true,
     "python-lsp@claude-plugins-official": true,
     "skill-creator@claude-plugins-official": true,
     "code-simplifier@claude-plugins-official": true,
@@ -132,8 +157,17 @@
     "allowUnsandboxedCommands": false
   },
   "worktree": {
+    "sparsePaths": [
+      ".claude",
+      "app",
+      "tests",
+      "hooks",
+      "make"
+    ],
     "symlinkDirectories": [".venv"]
   },
+  "preferredNotifChannel": "terminal_bell",
+  "spinnerTipsEnabled": false,
   "effortLevel": "high",
   "alwaysThinkingEnabled": true,
   "autoMemoryEnabled": true,

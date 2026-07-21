@@ -102,12 +102,12 @@ This project avoids the FastAPI Cloud CLI stack (`fastapi-cloud-cli` / `sentry-s
    Example:
 
    ```sh
-   docker compose up --build
+   docker compose up --watch   # live reload via Compose watch (see below)
    # or
    make docker-run-dev
    ```
 
-   The app is published on **127.0.0.1:8000** on the host (loopback only), matching `make dev`. Use [http://127.0.0.1:8000](http://127.0.0.1:8000) or `localhost` from the same machine.
+   `--watch` syncs edits under `app/` into the running container (instant reload) and rebuilds the image when `pyproject.toml` / `uv.lock` change — no bind mount needed. The app is published on **127.0.0.1:8000** on the host (loopback only), matching `make dev`. Use [http://127.0.0.1:8000](http://127.0.0.1:8000) or `localhost` from the same machine.
 
    If you want to set values explicitly in YAML (not recommended for real secrets), you can use:
 

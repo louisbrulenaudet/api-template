@@ -1,37 +1,18 @@
-# Index-only exclusions: keep readable via explicit open, but do not index.
-# Prefer this over .cursorignore for generated/heavy paths that are not secrets.
+# .cursorindexingignore — SOFT exclude (search/index only). Files stay openable by the Agent
+# and @-mentions on demand; they're just kept out of codebase search & embeddings so they don't
+# dilute retrieval quality.
+#
+# Cursor ALREADY de-indexes (a) everything in .gitignore and (b) a built-in default list (lock
+# files, .env*, node_modules/, __pycache__/, build output, images, archives, .git/). So the only
+# thing worth listing here is a file that is COMMITTED (indexed by default) yet noisy to embed.
+# In this repo that is the dependency lockfile. Everything the previous version also listed
+# (htmlcov/, dist/, build/, *.egg-info/, coverage.*, *.log, *.png …) is already gitignored or
+# default-ignored — re-listing it was dead weight.
 
-.venv/
-venv/
-env/
-__pycache__/
-*.py[cod]
-
-.ruff_cache/
-.pytest_cache/
-.mypy_cache/
-.tox/
-.nox/
-.hypothesis/
-.cache/
-.uv/
-.logfire/
-
-htmlcov/
-.coverage
-.coverage.*
-coverage.xml
-*.cover
-
-dist/
-build/
-*.egg-info/
-.eggs/
-wheels/
-site/
-docs/_build/
-
-hooks/logs/
-
-# Lockfile is large; Cursor also skips *.lock by default for indexing.
+# ── Committed dependency lock — readable for audits, noisy to index/embed ──────
 uv.lock
+
+# ── Template hook: if your fork COMMITS generated artifacts Cursor would otherwise index
+#    (an OpenAPI dump, a generated client, vendored code), de-index them here, e.g.:
+#      openapi.json
+#      app/_generated/**

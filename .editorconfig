@@ -1,0 +1,35 @@
+# EditorConfig — cross-editor baseline aligned with Ruff ([tool.ruff] in pyproject.toml).
+# https://editorconfig.org · honored in VS Code via the editorconfig.editorconfig extension.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+max_line_length = 100
+
+[*.py]
+indent_size = 4
+max_line_length = 100
+
+# YAML/JSON conventionally use 2-space indentation (compose.yaml, workflows, dependabot).
+[*.{yml,yaml,json,jsonc}]
+indent_size = 2
+
+# TOML follows the repo's 4-space pyproject.toml style.
+[*.toml]
+indent_size = 4
+
+# Preserve Markdown hard line breaks (two trailing spaces).
+[*.md]
+trim_trailing_whitespace = false
+
+# Makefiles require literal tabs.
+[Makefile]
+indent_style = tab
+
+[*.mk]
+indent_style = tab
