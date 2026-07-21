@@ -1,14 +1,19 @@
+name: api-template
+
 services:
   app:
-    # API container for local development (Dockerfile target `reload`: hot reload, same deps as `runtime`).
+    # API container for local development (Dockerfile target `reload`: hot reload,
+    # same dependency set as `runtime`).
     # - Loads configuration from `.env` (do not commit secrets).
-    # - Hot-reloads using the mounted `./app` volume.
+    # - Live-reloads via Compose `develop.watch` below — no bind mount needed.
     build:
       context: .
       dockerfile: Dockerfile
       target: reload
     working_dir: /app
-    command: ["fastapi", "dev", "app/main.py", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    # Signal forwarding + zombie reaping for PID 1 (matters for the `fastapi dev`
+    # reloader subprocess).
+    init: true
     ports:
       # Bind to loopback only — prevents accidental exposure on all interfaces,
       # which would bypass host firewall rules (e.g. UFW).
@@ -19,40 +24,45 @@ services:
     environment:
       LOGFIRE_SEND_TO_LOGFIRE: "false"
       LOGFIRE_PYDANTIC_PLUGIN_RECORD: "off"
-    # Alternative (explicit) configuration.
-    # Use this instead of `env_file` only if you know what you're doing and
-    # keep secrets out of version control.
-    #
+    # Alternative (explicit) configuration — keep secrets out of version control:
     # environment:
     #   APP_NAME: "Backend"
     #   API_KEY: "your_api_key_here"
     #   API_CLIENT: "your_client_id_here"
-    # Root filesystem is read-only; the source volume and /tmp are the only writable paths.
-    read_only: true
+
+    # NOTE: `read_only: true` is intentionally NOT set on this dev service because
+    # `develop.watch` (action: sync) writes changed source into /app/app inside the
+    # container, which a read-only rootfs would block. The production `runtime`
+    # image needs no writable rootfs — enforce `read_only: true` in prod. /tmp is
+    # still capped and isolated via tmpfs below.
     tmpfs:
-      # Writable scratch space for stdlib tempfile, uvicorn, etc. Maximum size 64MB.
       - /tmp:size=64m,mode=1777
 
-    # Drop every capability, then add back only what is explicitly required.
-    # A plain FastAPI/uvicorn process needs none of the default set.
+    # Drop every capability; a plain uvicorn/FastAPI process needs none.
     cap_drop:
       - ALL
-
     security_opt:
-      # Prevents privilege escalation via setuid/setgid binaries inside the container.
+      # Block privilege escalation via setuid/setgid binaries.
       - no-new-privileges:true
-
-    # Limits the number of processes/threads; mitigates fork-bomb style attacks.
+    # Limit process/thread count; mitigates fork-bomb style abuse.
     pids_limit: 256
 
-    # Prevents unbounded log growth from exhausting host disk space.
+    # Bound container resources so a runaway process can't starve the host.
+    # Enforced by Docker Compose v2 `up` (no Swarm required).
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1024M
+
+    # Prevent unbounded log growth from exhausting host disk.
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
 
-    # Docker Compose waits for healthy status before marking the service as up.
+    # Compose waits for healthy before dependents start; port matches the dev server.
     healthcheck:
       test: ["CMD", "python", "-c", "import sys,urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health',timeout=3); sys.exit(0 if r.status==200 else 1)"]
       interval: 30s
@@ -60,10 +70,22 @@ services:
       start_period: 10s
       retries: 3
 
-    volumes:
-      # Mount source for live reload (host -> container).
-      # Docker volume mounts override the read-only rootfs for their target path.
-      - ./app:/app/app
+    # Hot reload without a bind mount (better DX on macOS/Windows):
+    #   sync    → copy edited source into the running container (fastapi dev reloads)
+    #   rebuild → a dependency/manifest change triggers an image rebuild
+    # Run with `docker compose up --watch` (see `make docker-run-dev`).
+    develop:
+      watch:
+        - action: sync
+          path: ./app
+          target: /app/app
+          ignore:
+            - __pycache__/
+        - action: rebuild
+          path: pyproject.toml
+        - action: rebuild
+          path: uv.lock
+
     restart: unless-stopped
     networks:
       - internal
@@ -72,17 +94,38 @@ services:
     # Cloudflare Tunnel sidecar for sharing the development API externally.
     # Opt-in via Compose profile `tunnel`.
     profiles: ["tunnel"]
-    image: cloudflare/cloudflared:latest
-    container_name: cloudflared
+    # Pin the version (never `:latest`) for reproducible tunnels.
+    image: cloudflare/cloudflared:2026.7.2
+    init: true
     restart: unless-stopped
-    # The tunnel token identifies the tunnel configuration created in Cloudflare.
-    # We also pass the local URL so the tunnel knows where to forward traffic.
+    # The tunnel token identifies the tunnel configuration created in Cloudflare;
+    # the URL tells the tunnel where to forward traffic.
     command: tunnel --no-autoupdate run --url http://app:8000
     dns:
       - 1.1.1.1
       - 8.8.8.8
     environment:
       - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    # Hardening — cloudflared makes only outbound connections: it needs no Linux
+    # capabilities and no writable rootfs.
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       app:
         condition: service_healthy

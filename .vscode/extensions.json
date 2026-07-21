@@ -1,0 +1,24 @@
+{
+  // Workspace extension recommendations for the api-template stack
+  // (Python 3.14 · uv · Ruff · ty · FastAPI · pytest · Docker).
+  // VS Code / Cursor prompt to install these when the folder is opened.
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.debugpy", // Python debugger used by .vscode/launch.json
+    "charliermarsh.ruff",
+    "astral-sh.ty", // type checker + language server; mirrors `ty check` in CI
+    "ms-azuretools.vscode-docker", // Dockerfile + compose.yaml
+    "redhat.vscode-yaml", // compose.yaml, .pre-commit-config.yaml, workflows
+    "github.vscode-github-actions", // .github/workflows/*.yml
+    "streetsidesoftware.code-spell-checker" // spell-check (cSpell.words in settings.json)
+  ],
+  // Explicitly discouraged: these duplicate or fight Ruff / ty and would
+  // surface double diagnostics or a competing formatter.
+  "unwantedRecommendations": [
+    "ms-python.black-formatter", // Ruff formats
+    "ms-python.isort", // Ruff sorts imports (source.organizeImports.ruff)
+    "ms-python.flake8", // Ruff lints
+    "ms-python.pylint", // Ruff lints
+    "ms-python.mypy-type-checker" // ty is the type checker for this repo
+  ]
+}

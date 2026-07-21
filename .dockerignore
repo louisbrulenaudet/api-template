@@ -4,10 +4,14 @@
 # changes to this file.
 *
 
-# builder stage — uv sync --frozen --no-dev
+# builder stage — uv sync --locked --no-dev
 !pyproject.toml
 !uv.lock
 
 # runtime stage — application source
 !app/
 !app/**
+
+# …but never ship host bytecode caches that slipped into the allowlisted app/ tree.
+app/**/__pycache__
+app/**/*.pyc

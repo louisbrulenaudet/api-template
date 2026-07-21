@@ -1,0 +1,175 @@
+{
+  "version": "2.0.0",
+  // Thin wrappers over the Makefile so the editor (⇧⌘B / "Run Task") and CI run
+  // the exact same commands. Ruff output is parsed into the Problems panel.
+  "tasks": [
+    {
+      "label": "dev: FastAPI (hot reload)",
+      "detail": "make dev — uv run fastapi dev on :8000",
+      "type": "shell",
+      "command": "make dev",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "group": "run" },
+      "icon": { "id": "rocket", "color": "terminal.ansiCyan" }
+    },
+    {
+      "label": "ci: gate (ruff + ty)",
+      "detail": "make ci — ruff format + lint --fix, then ty check (pre-PR gate)",
+      "type": "shell",
+      "command": "make ci",
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": [
+        {
+          "owner": "ruff",
+          "source": "ruff",
+          "fileLocation": ["relative", "${workspaceFolder}"],
+          "pattern": {
+            "regexp": "^(.+?):(\\d+):(\\d+): (\\w+) (.+)$",
+            "file": 1,
+            "line": 2,
+            "column": 3,
+            "code": 4,
+            "message": 5
+          }
+        }
+      ],
+      "icon": { "id": "check-all", "color": "terminal.ansiGreen" }
+    },
+    {
+      "label": "lint: ruff check",
+      "detail": "make check — uv run ruff check .",
+      "type": "shell",
+      "command": "make check",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": [
+        {
+          "owner": "ruff",
+          "source": "ruff",
+          "fileLocation": ["relative", "${workspaceFolder}"],
+          "pattern": {
+            "regexp": "^(.+?):(\\d+):(\\d+): (\\w+) (.+)$",
+            "file": 1,
+            "line": 2,
+            "column": 3,
+            "code": 4,
+            "message": 5
+          }
+        }
+      ],
+      "icon": { "id": "search" }
+    },
+    {
+      "label": "format: ruff format + fix",
+      "detail": "make format — ruff format . && ruff check . --fix",
+      "type": "shell",
+      "command": "make format",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": [
+        {
+          "owner": "ruff",
+          "source": "ruff",
+          "fileLocation": ["relative", "${workspaceFolder}"],
+          "pattern": {
+            "regexp": "^(.+?):(\\d+):(\\d+): (\\w+) (.+)$",
+            "file": 1,
+            "line": 2,
+            "column": 3,
+            "code": 4,
+            "message": 5
+          }
+        }
+      ],
+      "icon": { "id": "wand" }
+    },
+    {
+      "label": "type-check: ty",
+      "detail": "make type-check — uv run ty check .",
+      "type": "shell",
+      "command": "make type-check",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": [],
+      "icon": { "id": "symbol-class" }
+    },
+    {
+      "label": "test: pytest + coverage",
+      "detail": "make test — uv run pytest (coverage → term + htmlcov/)",
+      "type": "shell",
+      "command": "make test",
+      "group": { "kind": "test", "isDefault": true },
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "problemMatcher": [],
+      "icon": { "id": "beaker", "color": "terminal.ansiMagenta" }
+    },
+    {
+      "label": "pre-commit: all files",
+      "detail": "make pre-commit — uv run pre-commit run --all-files",
+      "type": "shell",
+      "command": "make pre-commit",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": [],
+      "icon": { "id": "git-commit" }
+    },
+    {
+      "label": "deps: sync (uv)",
+      "detail": "make sync — uv sync (locked, dev group; matches CI)",
+      "type": "shell",
+      "command": "make sync",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "icon": { "id": "sync" }
+    },
+    {
+      "label": "deps: lock (uv)",
+      "detail": "make lock — uv lock",
+      "type": "shell",
+      "command": "make lock",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "icon": { "id": "lock" }
+    },
+    {
+      "label": "docker: build",
+      "detail": "make docker-build — docker compose build",
+      "type": "shell",
+      "command": "make docker-build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": [],
+      "icon": { "id": "package", "color": "terminal.ansiBlue" }
+    },
+    {
+      "label": "docker: up + watch",
+      "detail": "make docker-run-dev — docker compose up --watch app (:8000)",
+      "type": "shell",
+      "command": "make docker-run-dev",
+      "isBackground": true,
+      "presentation": { "reveal": "always", "panel": "dedicated", "group": "run" },
+      "problemMatcher": [],
+      "icon": { "id": "vm-running", "color": "terminal.ansiBlue" }
+    },
+    {
+      "label": "docker: down",
+      "detail": "make docker-stop — docker compose down",
+      "type": "shell",
+      "command": "make docker-stop",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": [],
+      "icon": { "id": "vm-outline", "color": "terminal.ansiBlue" }
+    },
+    {
+      "label": "docker: logs",
+      "detail": "make docker-logs — docker compose logs -f",
+      "type": "shell",
+      "command": "make docker-logs",
+      "isBackground": true,
+      "presentation": { "reveal": "always", "panel": "dedicated", "group": "run" },
+      "problemMatcher": [],
+      "icon": { "id": "output", "color": "terminal.ansiBlue" }
+    }
+  ]
+}

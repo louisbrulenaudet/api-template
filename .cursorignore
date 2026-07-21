@@ -1,45 +1,66 @@
-# Block Agent / Tab / Inline Edit / @ — secrets and never-prompt paths only.
-# Index noise belongs in .cursorindexingignore (AI can still open those when needed).
-# Cursor already respects .gitignore for indexing; do not duplicate it here.
+# .cursorignore — HARD block (Agent, Tab, Inline Edit, @ mentions cannot access these).
+# Purpose: keep secrets and never-touch runtime state completely out of any AI surface.
+#
+# Cursor already respects .gitignore and ships default ignores (lock files, env files,
+# build output, binaries, media, node_modules/, __pycache__/, .git/). This file only adds
+# what must be *blocked entirely*, not merely de-indexed — de-indexable noise lives in
+# .cursorindexingignore so the Agent can still open it on demand.
+#
+# Negation caveat (Cursor docs): `!` cannot re-include a file whose parent dir is excluded
+# by a `*` wildcard. The `!.env.template` line works only because no parent is wildcarded.
 
-# Secrets & credentials
-.env
-.env.*
+# ── Secrets & credentials ─────────────────────────────────────────────────────
+# Scoped to credential file *shapes*, not name substrings: broad globs like *token* or
+# *secret* would wrongly block legitimate source (e.g. token_service.py, secrets_manager.py).
+**/.env
+**/.env.*
 !.env.template
-**/*credentials*
-**/*secret*
 **/*.pem
 **/*.key
+**/*.crt
 **/*.p12
 **/*.pfx
+**/*.pkcs12
+**/*.keystore
 **/id_rsa
 **/id_rsa.pub
+**/id_ed25519
+**/id_ed25519.pub
+**/*.pgpass
+**/credentials.json
+**/gha-creds-*.json
+**/.pypirc
+**/.netrc
 
-# Virtualenvs & bytecode (never useful in prompts)
-.venv/
-venv/
-env/
-ENV/
-__pycache__/
-*.py[cod]
-*$py.class
+# ── Local agent-config overlays (gitignored; may carry API keys / personal tokens) ─────
+# .gitignore only de-indexes these; hard-block the Agent surface too — same defense-in-depth
+# rationale as the secrets above. (.cursorignore is Cursor-only, so this does not affect how
+# Claude Code loads its own settings.local.json / CLAUDE.local.md.)
+**/.claude/settings.local.json
+**/CLAUDE.local.md
 
-# Coverage & tool caches (noise + large)
-htmlcov/
-.coverage
-.coverage.*
-.ruff_cache/
-.pytest_cache/
-.mypy_cache/
-.tox/
-.nox/
-.hypothesis/
-.cache/
-.uv/
-.logfire/
+# ── Local Python runtime & caches (never useful to the Agent) ─────────────────
+**/.venv/
+**/venv/
+**/env/
+**/ENV/
+**/__pycache__/
+**/*.py[cod]
+**/*$py.class
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.hypothesis/
+**/.tox/
+**/.nox/
+**/.cache/
+**/.uv/
+**/.logfire/
 
-# Hook runtime logs
-hooks/logs/
+# ── Agent hook runtime logs (may capture command output / tokens) ─────────────
+**/hooks/logs/
 
-# OS junk
-.DS_Store
+# ── OS & editor noise ─────────────────────────────────────────────────────────
+**/.DS_Store
+**/*.swp
+**/*.swo

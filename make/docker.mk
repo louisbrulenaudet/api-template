@@ -1,4 +1,4 @@
-.PHONY: check-docker docker-build docker-rebuild docker-start docker-stop docker-restart docker-logs docker-clean docker-run-dev docker-run-dev-tunnel docker-tunnel-logs docker-tunnel-stop docker-deploy-prod docker-logs-prod
+.PHONY: docker-check docker-build docker-rebuild docker-start docker-stop docker-restart docker-logs docker-clean docker-run-dev docker-run-dev-tunnel docker-tunnel-logs docker-tunnel-stop
 
 docker-check: ## Verify Docker installation and configuration
 	@if ! command -v docker >/dev/null 2>&1; then \
@@ -41,13 +41,13 @@ docker-clean: ## Remove all containers and volumes
 	@echo "🧹 Cleaning up resources..."
 	docker compose down --volumes --remove-orphans
 
-docker-run-dev: ## Start development server with live reload
+docker-run-dev: ## Start dev server with Compose watch (sync app/, rebuild on dep changes)
 	@echo "🚀 Starting development server..."
-	docker compose up -d app
+	docker compose up --watch app
 
-docker-run-dev-tunnel: ## Start dev server with Cloudflare Tunnel (opt-in via profile)
+docker-run-dev-tunnel: ## Start dev server (watch) + Cloudflare Tunnel (opt-in profile)
 	@echo "🌐 Starting dev server + Cloudflare Tunnel..."
-	docker compose --profile tunnel up -d app cloudflared
+	docker compose --profile tunnel up --watch app cloudflared
 
 docker-tunnel-logs: ## Follow Cloudflare Tunnel logs
 	@echo "📜 Following Cloudflare Tunnel logs..."

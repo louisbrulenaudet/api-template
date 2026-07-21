@@ -6,16 +6,23 @@ FROM python:3.14-slim AS builder
 
 COPY --from=ghcr.io/astral-sh/uv:0.11.29 /uv /bin/
 
+# UV_COMPILE_BYTECODE: ship precompiled .pyc for faster cold start.
+# UV_LINK_MODE=copy: the cache mount is a different filesystem than the venv, so
+#   copy instead of hardlink (avoids cross-device link warnings).
+# UV_PYTHON_DOWNLOADS=0: use the base image's Python; never fetch a second one.
 ENV UV_COMPILE_BYTECODE=1 \
-    UV_LINK_MODE=copy
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=0
 
 WORKDIR /app
 ENV PATH="/app/.venv/bin:$PATH"
 
 COPY pyproject.toml uv.lock /app/
 
+# --locked fails the build if uv.lock is stale vs pyproject.toml (matches CI);
+# --frozen is for workspace bootstrap only. The cache mount persists uv's downloads.
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
+    uv sync --locked --no-dev
 
 FROM python:3.14-slim AS runtime
 
@@ -31,7 +38,8 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 ENV PATH="/app/.venv/bin:$PATH"
 
-COPY --from=builder /app/.venv /app/.venv
+# --link isolates the venv on its own layer for better cross-build cache reuse.
+COPY --link --from=builder /app/.venv /app/.venv
 
 # Fixed UID/GID (10001) avoids accidental collision with system UIDs and is
 # predictable across rebuilds. -M: no home directory. -s /sbin/nologin: no shell.
@@ -43,7 +51,20 @@ COPY --chown=appuser:appuser ./app /app/app
 
 USER 10001:10001
 
-HEALTHCHECK --interval=60s --timeout=5s --start-period=10s --retries=3 \
+# OCI image metadata for provenance. CI can inject dynamic fields, e.g.
+# --build-arg APP_VERSION=$(git describe --tags). Placed late so label changes
+# do not bust the venv/source layers above.
+ARG APP_VERSION=0.1.0
+LABEL org.opencontainers.image.title="backend" \
+      org.opencontainers.image.description="Minimal, production-ready FastAPI template with strict Pydantic validation." \
+      org.opencontainers.image.source="https://github.com/louisbrulenaudet/api-template" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.version="${APP_VERSION}"
+
+EXPOSE 8001
+
+# --start-interval probes more frequently during the start period.
+HEALTHCHECK --interval=60s --timeout=5s --start-period=10s --start-interval=5s --retries=3 \
     CMD python -c "import sys,urllib.request; url='http://127.0.0.1:8001/api/v1/health'; r=urllib.request.urlopen(url,timeout=3); sys.exit(0 if r.status==200 else 1)"
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
@@ -51,4 +72,13 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
 # Inherits the hardened runtime image; fastapi/uvicorn come from the venv,
 # so uv is not needed here either.
 FROM runtime AS reload
-CMD ["fastapi", "dev", "app/main.py", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+# The dev server listens on 8000; override the inherited 8001 healthcheck so the
+# reload image is also correct when run directly (Compose overrides it too).
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --start-interval=5s --retries=3 \
+    CMD python -c "import sys,urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health',timeout=3); sys.exit(0 if r.status==200 else 1)"
+
+EXPOSE 8000
+
+# `fastapi dev` already enables --reload.
+CMD ["fastapi", "dev", "app/main.py", "--host", "0.0.0.0", "--port", "8000"]

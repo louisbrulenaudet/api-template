@@ -1,0 +1,75 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "FastAPI: debug (uvicorn)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["app.main:app", "--port", "8000"],
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "env": {
+        "LOGFIRE_SEND_TO_LOGFIRE": "false",
+        "LOGFIRE_PYDANTIC_PLUGIN_RECORD": "off"
+      }
+    },
+    {
+      // Hot reload while debugging. uvicorn --reload spawns a worker child, so
+      // subProcess MUST be true or route-handler breakpoints never hit.
+      "name": "FastAPI: hot reload (uvicorn --reload)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["app.main:app", "--reload", "--port", "8000"],
+      "subProcess": true,
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "env": {
+        "LOGFIRE_SEND_TO_LOGFIRE": "false",
+        "LOGFIRE_PYDANTIC_PLUGIN_RECORD": "off"
+      }
+    },
+    {
+      "name": "Pytest: current file",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      // --no-cov so pytest-cov (from addopts) doesn't disable breakpoints.
+      "args": ["${file}", "-v", "--no-cov"],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Python: current file",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      // Attach to a debugpy server, e.g. one started inside the Docker container
+      // (`python -m debugpy --listen 0.0.0.0:5678 ...`). remoteRoot matches the
+      // compose working_dir (/app).
+      "name": "Attach: debugpy (:5678)",
+      "type": "debugpy",
+      "request": "attach",
+      "connect": { "host": "localhost", "port": 5678 },
+      "justMyCode": false,
+      "pathMappings": [
+        { "localRoot": "${workspaceFolder}", "remoteRoot": "/app" }
+      ]
+    },
+    {
+      // Not F5-launchable — this wires the Test Explorer / gutter "Debug Test"
+      // button (coverage already stripped via python.testing.pytestArgs).
+      "name": "Pytest: debug from Test Explorer",
+      "type": "debugpy",
+      "request": "launch",
+      "purpose": ["debug-test"],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    }
+  ]
+}
