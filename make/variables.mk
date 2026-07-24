@@ -5,7 +5,6 @@ PROJECT_NAME := ⚗️
 
 # FastAPI app path (override when invoking make: `make dev APP=...`)
 APP ?= app/main.py
-HOST ?= 0.0.0.0
 DEV_PORT ?= 8000
 PORT ?= 8001
 

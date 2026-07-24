@@ -1,4 +1,4 @@
-.PHONY: dev prod test sync sync-all check format type-check ci update pre-commit clean-venv install lock export-requirements
+.PHONY: dev prod test test-cov sync sync-all check format type-check ci update pre-commit clean-venv install lock export-requirements
 
 # Convention: routine commands run against uv.lock exactly via `--frozen` (install
 # from the lock, never re-resolve). The lock changes ONLY on explicit re-locking
@@ -16,6 +16,10 @@ prod: ## Start production server
 test: ## Run tests
 	@echo "🧪 Running tests..."
 	uv run --frozen pytest
+
+test-cov: ## Run tests with coverage (writes .coverage + htmlcov/)
+	@echo "🧪 Running tests with coverage..."
+	uv run --frozen pytest --cov=app --cov-report=term-missing --cov-report=html
 
 sync: ## Install from uv.lock exactly (--frozen; dev group included; matches CI)
 	@echo "📦 Syncing project environment (frozen)..."
@@ -42,7 +46,7 @@ format: ## Format source code
 
 type-check: ## Type check the source code
 	@echo "🔍 Type checking the source code..."
-	uv run --frozen ty check .
+	uv run --frozen ty check
 
 ci: format type-check ## Format + lint (Ruff) and type-check (ty); no tests
 	@echo "✅ CI gate passed (ruff + ty)"
