@@ -28,7 +28,7 @@ async def list_items(
 
 1. Validate inputs (framework + Pydantic).
 2. Resolve dependencies (`Annotated[..., Depends(...)]`).
-3. Call core/service logic.
+3. Call service logic in `app/services/`.
 4. Return a DTO.
 
 No business logic inline in route modules. Prefer `async def` for I/O; never block the event loop.

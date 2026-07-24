@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from app.core.middleware import get_request_id
+from app.middlewares.request_id import get_request_id
 
 
 def test_request_id_header_is_present(client: TestClient) -> None:

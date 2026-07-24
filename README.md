@@ -42,10 +42,15 @@ Use the Makefile and **uv** for dependency management and day-to-day commands.
 │   │   └── error_codes.py           # Centralized error code definitions
 │   ├── exceptions/
 │   │   ├── core_exception.py        # Base exception class with structured error handling
-│   │   └── client_initialization_error.py  # Client initialization error
+│   │   ├── client_initialization_error.py  # Client initialization error
+│   │   └── handlers.py              # Global exception handler registration (CoreError -> JSON)
+│   ├── middlewares/
+│   │   ├── request_id.py            # X-Request-ID correlation middleware (pure ASGI)
+│   │   └── setup.py                 # configure_middleware(): the LIFO middleware stack
+│   ├── services/                    # Business-logic layer (thin handlers delegate here)
 │   ├── utils/
 │   │   └── decorators.py            # Utility decorators (retry, async_retry)
-│   └── main.py                      # FastAPI application entry point with middleware
+│   └── main.py                      # create_app() factory, middleware/handlers, lifespan
 ├── make/
 │   ├── dev.mk                       # Development commands
 │   ├── docker.mk                    # Docker-related commands

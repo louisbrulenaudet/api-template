@@ -14,9 +14,10 @@ app/
   core/               # Settings + shared httpx2 AsyncClient
   dtos/               # Wire DTOs (ping_response.py, health_response.py, …)
   enums/              # ErrorCodes
-  exceptions/         # CoreError subclasses
+  exceptions/         # CoreError subclasses + handlers.py (register_exception_handlers)
+  middlewares/        # RequestIDMiddleware + configure_middleware()
   utils/              # retry / async_retry
-  main.py             # App, middleware, CoreError handler
+  main.py             # create_app() factory, middleware + handler wiring, lifespan
 tests/                # pytest
 make/                 # Makefile fragments (dev, docker, help, variables)
 hooks/                # Shared Cursor + Claude agent hooks (not human git hooks)
