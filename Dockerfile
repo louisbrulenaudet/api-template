@@ -37,6 +37,17 @@ ENV PYTHONUNBUFFERED=1 \
     LOGFIRE_SEND_TO_LOGFIRE=false \
     LOGFIRE_PYDANTIC_PLUGIN_RECORD=off
 
+# Which peers may set X-Forwarded-For / X-Forwarded-Proto. uvicorn enables --proxy-headers by
+# default but trusts only 127.0.0.1, and a sidecar proxy (the cloudflared service in
+# compose.yaml) connects from another container on the bridge network - so the forwarded headers
+# were silently discarded: request.client.host became the proxy's IP, and FORCE_HTTPS produced an
+# infinite redirect loop because scope["scheme"] stayed "http" (which also kept the HEALTHCHECK
+# failing, so the tunnel's `depends_on: service_healthy` never released).
+# RFC1918 CIDRs rather than "*": still correct behind a container-network proxy, but a directly
+# published port cannot be spoofed from the internet. uvicorn reads this env var when the
+# --forwarded-allow-ips flag is absent, so it stays overridable per deployment.
+ENV FORWARDED_ALLOW_IPS="10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.1"
+
 WORKDIR /app
 ENV PATH="/app/.venv/bin:$PATH"
 
@@ -69,7 +80,10 @@ EXPOSE 8001
 HEALTHCHECK --interval=60s --timeout=5s --start-period=10s --start-interval=5s --retries=3 \
     CMD python -c "import sys,urllib.request; url='http://127.0.0.1:8001/api/v1/health'; r=urllib.request.urlopen(url,timeout=3); sys.exit(0 if r.status==200 else 1)"
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
+# --no-server-header drops the `server: uvicorn` banner, which only tells a scanner what to
+# target. Proxy-header trust comes from FORWARDED_ALLOW_IPS above rather than a flag, so it stays
+# overridable at run time without rebuilding.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001", "--no-server-header"]
 
 # Inherits the hardened runtime image; fastapi/uvicorn come from the venv,
 # so uv is not needed here either.

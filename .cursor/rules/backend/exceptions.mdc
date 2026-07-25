@@ -17,7 +17,10 @@ All domain errors subclass `CoreError` and use a symbolic code from `ErrorCodes`
 
 ## Client-facing payloads
 
-- `to_dict()` / handler JSON: `error`, `message`, `code`, `details`.
+- **One owner:** `app/dtos/error_response.py::ErrorResponse` (`error`, `message`, `code`, `details`, `request_id`). `CoreError` has **no `to_dict()`** - it was a second serializer that drifted (no `request_id`, echoed 5xx details). Do not reintroduce one.
+- Four handlers are registered in `handlers.py`, so every failure shares that envelope: `CoreError`, `RequestValidationError`, `StarletteHTTPException` (covers `fastapi.HTTPException`), and a catch-all `Exception`.
+- **`details` is withheld on 5xx** and logged instead: a server-side `details` describes an internal failure. 4xx `details` are client-actionable and preserved.
+- The catch-all runs inside `ServerErrorMiddleware`, *outside* `RequestIDMiddleware`, so correlation must come from `request_id_from(request)` (scope-backed), not `get_request_id()` (ContextVar, already reset).
 - `details` must be JSON-safe and free of secrets, tokens, and filesystem internals.
 
 ## Discipline

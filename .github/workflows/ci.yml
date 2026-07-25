@@ -46,7 +46,7 @@ jobs:
           - name: Run lint with ruff
             run: uv run --frozen ruff check .
           - name: Run type check with ty
-            run: uv run --frozen ty check . --output-format github
+            run: uv run --frozen ty check --output-format github
           - name: Run tests with pytest
             run: uv run --frozen pytest -q
 

@@ -11,9 +11,9 @@ Minimal production-ready **FastAPI** template: strict **Pydantic** validation, *
 ```
 app/
   api/v1/endpoints/   # HTTP routes (thin handlers)
-  core/               # Settings + shared httpx2 AsyncClient
-  dtos/               # Wire DTOs (ping_response.py, health_response.py, …)
-  enums/              # ErrorCodes
+  core/               # Settings, shared httpx2 AsyncClient, logging config, API-key dependency
+  dtos/               # Wire DTOs (ping_response.py, health_response.py, error_response.py, …)
+  enums/              # ErrorCodes + Environment
   exceptions/         # CoreError subclasses + handlers.py (register_exception_handlers)
   middlewares/        # RequestIDMiddleware + configure_middleware()
   utils/              # retry / async_retry
@@ -33,7 +33,10 @@ cp .env.template .env              # fill API_KEY, API_CLIENT, …
 make dev                           # http://localhost:8000 - ping: /api/v1/ping
 ```
 
-Required env (see `app/core/config.py`): `APP_NAME` (default `Backend`), `API_KEY`, `API_CLIENT`.
+Env (see `app/core/config.py`): field names map to env vars case-insensitively, so **no aliases** - only `name` has one (`APP_NAME`). Key vars: `ENVIRONMENT` (`development`|`staging`|`production`), `API_KEY`, `API_CLIENT`, `ALLOWED_ORIGINS`, `ALLOWED_HOSTS`, `DOCS_ENABLED`, `FORCE_HTTPS`, `ROOT_PATH`, `LOG_LEVEL`, `LOG_JSON`.
+
+**`ENVIRONMENT=production` fails closed**: startup raises unless `ALLOWED_ORIGINS` and
+`ALLOWED_HOSTS` are explicit (not `*`) and `API_KEY` is set; docs/OpenAPI default to off.
 
 ## Essential commands
 
@@ -44,7 +47,8 @@ Required env (see `app/core/config.py`): `APP_NAME` (default `Backend`), `API_KE
 | `make dev` / `make prod` | Dev (8000) / prod (8001) servers |
 | `make check` / `make format` | Ruff lint / format (+ `--fix` on format) |
 | `make type-check` | Ty |
-| `make test` | pytest + coverage |
+| `make test` | pytest (no coverage - fast inner loop) |
+| `make test-cov` | pytest + coverage (writes `.coverage`, `htmlcov/`) |
 | `make ci` | Local gate: `format` (Ruff) + `type-check` (ty); no tests |
 | `make pre-commit` | pre-commit all files |
 | `make docker-*` | See `make/docker.mk` / `make help` |
@@ -54,9 +58,12 @@ Required env (see `app/core/config.py`): `APP_NAME` (default `Backend`), `API_KE
 - **CORS** defaults to allow-all origins for local template use - **restrict in production**.
 - **`get_settings()`** is `@lru_cache(maxsize=1)`. Tests that change env must call `get_settings.cache_clear()`.
 - **`lru_cache`** only on `get_settings()`; use **aiocache** for async TTL caches (configured in app lifespan).
+- **aiocache alias config takes no `maxsize`** - `SimpleMemoryCache` rejects it, and `set_config()` only stores the dict, so a bad key raises `TypeError` lazily on the first `caches.get("default")` (i.e. as a 500 inside a route). TTL is the only eviction this backend has.
+- **`create_app(settings)` binds those settings** to `Depends(get_settings)` via `dependency_overrides`. Build test apps with the factory; never mutate the module-level `app`.
 - **Outbound HTTP** uses a shared lifespan-scoped `httpx2.AsyncClient` on `app.state.http_client` (`app/core/http_client.py`); inject via `Depends(get_http_client)`. Do not create per-request clients.
 - **Docker build context** is an allowlist in `.dockerignore` (`*` then `!pyproject.toml`, `!uv.lock`, `!app/`). New `COPY` paths need a matching `!` entry.
 - **Do not hand-edit `uv.lock`** - use `make lock` / `uv lock`.
+- **Type suppressions are `# ty: ignore[rule-name]`** - `# type: ignore` no longer suppresses anything, and a bare `# ty: ignore` is an error. ty checks only `app/` + `tests/` (`[tool.ty.src] include` allowlist), so new top-level packages must be added there. See `quality/python-tooling`.
 - **Logfire** send/plugin flags stay off via Makefile / Docker / CI unless explicitly enabled.
 - **Never commit `.env`**, keys, or credentials. Agent hooks block secret staging/reads and destructive git when wired.
 - Prefer **`CoreError`** subclasses + `ErrorCodes` for domain failures; DTO modules hold shapes only.
@@ -65,6 +72,8 @@ Required env (see `app/core/config.py`): `APP_NAME` (default `Backend`), `API_KE
 
 - `GET /api/v1/ping` → `PingResponse`
 - `GET /api/v1/health` → `HealthResponse`
+
+Both stay **unauthenticated** (Docker/K8s probes). Every error - domain, validation, `HTTPException`, unhandled - returns one `ErrorResponse` envelope (`error`, `message`, `code`, `details`, `request_id`); `details` is withheld on 5xx. Protect a router with `APIRouter(dependencies=[Depends(require_api_key)])` (`app/core/security.py`).
 
 ## Agent harness
 

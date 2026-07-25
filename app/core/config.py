@@ -7,51 +7,113 @@ from typing import Annotated, Self
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+from app.enums.environment import Environment
+
 __all__ = [
     "Settings",
     "get_settings",
 ]
 
+_WILDCARD = "*"
+
 
 def _get_package_version() -> str:
-    """Return the version from pyproject.toml."""
+    """Return the version from pyproject.toml.
+
+    Raises:
+        TypeError: If `[project].version` is not a string. `tomllib.load` is typed as returning `dict[str, Any]`, so without this check `Settings.version` would silently become an unvalidated `Any` (Pydantic does not validate `default_factory` output).
+    """
     pyproject = Path(__file__).parent.parent.parent / "pyproject.toml"
-    with pyproject.open("rb") as f:
-        return tomllib.load(f)["project"]["version"]
+    with pyproject.open("rb") as handle:
+        version = tomllib.load(handle)["project"]["version"]
+
+    if not isinstance(version, str):
+        raise TypeError(
+            f"pyproject.toml [project].version must be a string, got {type(version).__name__}."
+        )
+    return version
+
+
+def _split_csv(value: object) -> object:
+    """Parse a comma-separated env string into a list, leaving other inputs untouched."""
+    if isinstance(value, str):
+        return [item.strip() for item in value.split(",") if item.strip()]
+    return value
 
 
 class Settings(BaseSettings):
-    """Configuration settings for the application, validated by Pydantic."""
+    """Configuration settings for the application, validated by Pydantic.
+
+    Field names map to environment variables case-insensitively, so `api_key` reads `API_KEY` with no alias needed. `populate_by_name=True` keeps `Settings(name=...)` working in tests - without it, `name=` would be swallowed by `extra="ignore"` and silently replaced by the default.
+    """
 
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
         frozen=True,
+        populate_by_name=True,
+        env_ignore_empty=True,
     )
 
-    name: str = Field(default="Backend", alias="APP_NAME")
+    environment: Environment = Field(
+        default=Environment.DEVELOPMENT,
+        description="Deployment environment; PRODUCTION enforces the fail-closed guards below.",
+    )
+
+    name: str = Field(default="Backend", validation_alias="APP_NAME")
     version: str = Field(default_factory=_get_package_version)
-    service_start_time: float = Field(default_factory=time.time, exclude=True)
+    service_start_time: float = Field(default_factory=time.monotonic, exclude=True)
+
     # Secret: masked in logs/repr; read the raw value via `api_key.get_secret_value()`.
-    api_key: SecretStr = Field(default=SecretStr(""), alias="API_KEY")
-    api_client: str = Field(default="", alias="API_CLIENT")
-    force_https: bool = Field(default=False, alias="FORCE_HTTPS")
-    docs_enabled: bool = Field(default=True, alias="DOCS_ENABLED")
+    api_key: SecretStr = Field(default=SecretStr(""))
+    api_client: str = Field(default="")
 
-    allowed_origins: Annotated[list[str], NoDecode] = Field(
-        default_factory=lambda: ["*"],
-        alias="ALLOWED_ORIGINS",
+    force_https: bool = Field(default=False)
+    root_path: str = Field(
+        default="",
+        description="ASGI root_path when mounted under a sub-path by a proxy (see FastAPI docs).",
     )
-    allow_credentials: bool = Field(default=False, alias="ALLOW_CREDENTIALS")
 
-    @field_validator("allowed_origins", mode="before")
+    # `None` means "derive from environment": enabled outside production, disabled in it.
+    # An explicit true/false always wins, so docs can be published deliberately.
+    docs_enabled: bool | None = Field(default=None)
+
+    allowed_origins: Annotated[list[str], NoDecode] = Field(default_factory=lambda: [_WILDCARD])
+    allow_credentials: bool = Field(default=False)
+    allowed_hosts: Annotated[list[str], NoDecode] = Field(default_factory=lambda: [_WILDCARD])
+
+    log_level: str = Field(default="INFO")
+    log_json: bool = Field(
+        default=False,
+        description="Emit one JSON object per log record; recommended when shipping to a collector.",
+    )
+
+    @field_validator("allowed_origins", "allowed_hosts", mode="before")
     @classmethod
     def _split_origins(cls, value: object) -> object:
-        """Parse a comma-separated ALLOWED_ORIGINS env string into a list of origins."""
-        if isinstance(value, str):
-            return [origin.strip() for origin in value.split(",") if origin.strip()]
-        return value
+        """Parse comma-separated origin/host env strings into lists."""
+        return _split_csv(value)
+
+    @field_validator("log_level", mode="after")
+    @classmethod
+    def _normalize_log_level(cls, value: str) -> str:
+        """Uppercase and validate the log level against the stdlib names."""
+        level = value.strip().upper()
+        allowed = {"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"}
+        if level not in allowed:
+            raise ValueError(f"LOG_LEVEL must be one of {sorted(allowed)}, got {value!r}.")
+        return level
+
+    @property
+    def docs_are_enabled(self) -> bool:
+        """Return whether OpenAPI/docs routes should be mounted.
+
+        Production defaults to disabled so an unconfigured deployment does not publish its schema; `DOCS_ENABLED` overrides in either direction.
+        """
+        if self.docs_enabled is not None:
+            return self.docs_enabled
+        return not self.environment.is_production
 
     @model_validator(mode="after")
     def _reject_wildcard_with_credentials(self) -> Self:
@@ -59,10 +121,35 @@ class Settings(BaseSettings):
 
         Starlette silently reflects the request origin when `allow_origins=["*"]` and `allow_credentials=True`, effectively allowing any site to send credentialed requests. Reject that combination at startup instead.
         """
-        if self.allow_credentials and "*" in self.allowed_origins:
+        if self.allow_credentials and _WILDCARD in self.allowed_origins:
             raise ValueError(
                 "ALLOW_CREDENTIALS cannot be enabled with wildcard ALLOWED_ORIGINS "
                 "['*']; specify explicit origins when credentials are allowed."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _enforce_production_hardening(self) -> Self:
+        """Fail closed: refuse to boot a production app that still holds template defaults.
+
+        Each of these is safe locally and unsafe in production, and every one of them is easy to forget. Raising here turns a silent misconfiguration into a startup failure with a precise message.
+        """
+        if not self.environment.is_production:
+            return self
+
+        problems: list[str] = []
+        if _WILDCARD in self.allowed_origins:
+            problems.append("ALLOWED_ORIGINS must list explicit origins (not '*')")
+        if _WILDCARD in self.allowed_hosts:
+            problems.append("ALLOWED_HOSTS must list explicit hostnames (not '*')")
+        if not self.api_key.get_secret_value():
+            problems.append("API_KEY must be set")
+
+        if problems:
+            raise ValueError(
+                f"Invalid configuration for ENVIRONMENT={self.environment.value}: "
+                + "; ".join(problems)
+                + ". Set these explicitly, or use a non-production ENVIRONMENT locally."
             )
         return self
 

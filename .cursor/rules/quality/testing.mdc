@@ -8,6 +8,13 @@ alwaysApply: false
 
 Tests use **pytest** (+ pytest-asyncio / pytest-cov). Prefer the narrowest run that covers the change.
 
+## Building the app under test
+
+- Always go through **`create_app(settings)`**; it binds those settings to `Depends(get_settings)`. Never mutate the module-level `app` singleton, and never `importlib.reload(app.main)` - that rebinds the object other fixtures already captured.
+- `tests/conftest.py` provides `settings`, `app`, `client` (sync `TestClient`, runs lifespan) and `async_client` (`httpx2.ASGITransport`; it must enter `app.router.lifespan_context` itself, since ASGITransport does not run the lifespan).
+- Build settings with `build_settings(**overrides)` - it uses `model_validate`, so the environment and a local `.env` cannot influence a result.
+- Note `httpx2`, not `httpx`, is the installed client.
+
 ## What to test
 
 - Trust boundaries: Pydantic DTO validation, `CoreError` → HTTP mapping, route status codes and payloads.
@@ -17,7 +24,12 @@ Tests use **pytest** (+ pytest-asyncio / pytest-cov). Prefer the narrowest run t
 ## Commands
 
 - Full suite: `make test` / `uv run pytest`
+- With coverage: `make test-cov` (coverage is **not** in `addopts` - it slows the inner loop and hard-fails where `.coverage`/`htmlcov/` are not writable, e.g. a sandboxed agent)
 - Narrow: `uv run pytest tests/test_base.py` or `uv run pytest path::test_name`
+- `testpaths = ["tests"]` is required: without it a bare `pytest` walks the repo root and dies collecting unreadable dirs such as `hooks/logs`.
+- `filterwarnings = ["error"]`: a new DeprecationWarning fails the suite by design. Fix the cause; do not re-add `--disable-warnings`.
+- **Do not re-add `-q` to `addopts`.** pytest verbosity is additive, so `-q` (-1) cancels an explicit `-v` (+1) and leaves `-vv` as the only way to get verbose output. Default verbosity + `-ra` gives per-file progress and a summary of anything not passing.
+- Coverage is **100% statements and branches**. Genuinely unreachable defensive code is marked `# pragma: no branch` / `# pragma: no cover` with a comment saying why - never to hide untested reachable code.
 
 ## Discipline
 

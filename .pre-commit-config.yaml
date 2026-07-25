@@ -1,7 +1,7 @@
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Keep rev in sync with the ruff version pinned in pyproject.toml / uv.lock.
-    rev: v0.15.21
+    rev: v0.16.0
     hooks:
       # Lint with autofix must run BEFORE the formatter (Ruff's documented order).
       - id: ruff-check
@@ -9,3 +9,13 @@ repos:
       # Formatter - the previous config used `id: ruff` here, which silently ran
       # `ruff check` a second time instead of `ruff format`.
       - id: ruff-format
+  - repo: local
+    hooks:
+      - id: ty
+        name: ty (type check)
+        entry: uv run --frozen ty check
+        language: system
+        types_or: [python, pyi]
+        pass_filenames: false
+        always_run: true
+        require_serial: true

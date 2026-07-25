@@ -25,10 +25,24 @@ Single source of truth for tool config: [`pyproject.toml`](../../../pyproject.to
 |---------|---------|
 | `make check` | `ruff check .` |
 | `make format` | `ruff format` + `ruff check --fix` |
-| `make type-check` | `ty check .` |
+| `make type-check` | `ty check` |
 | `make test` | pytest |
 | `make ci` | `format` + `type-check` (Ruff + ty; no tests) |
-| `make pre-commit` | pre-commit on all files |
+| `make pre-commit` | pre-commit on all files (Ruff lint → Ruff format → ty) |
+
+## Type safety (ty)
+
+ty is the **sole** type checker and LSP (no mypy/pyright config - do not add one). Config: `[tool.ty.*]` in `pyproject.toml`.
+
+- **Suppressions must be `# ty: ignore[rule-name]`.** `analysis.respect-type-ignore-comments = false`, so a mypy-style `# type: ignore` no longer suppresses anything - it is just a comment. A bare `# ty: ignore` is an error (`blanket-ignore-comment`), and stale or misspelled ones fail too (`unused-ignore-comment`, `ignore-comment-unknown-rule`). A suppression is a last resort, never a way to clear a check - see [guardrails.md](../core/guardrails.md).
+- **Strictness budget:** of ty's 122 rules, 92 default to `error` and 22 to `warn`; `terminal.error-on-warning = true` makes both levels fail the gate. That leaves only the 8 off-by-default rules as a lever, and 7 are enabled in `[tool.ty.rules]`. `possibly-unresolved-reference` stays off (ty disables it for false positives). Curated-strict is deliberate over `all = "error"`: a ty upgrade must not silently promote a new rule into a hard failure.
+- **`src.include` is an allowlist** (`["app", "tests"]`). A new top-level Python package - a `scripts/`, a root `conftest.py` - is silently **unchecked** until added there.
+- **`src.exclude` extends** ty's built-in defaults (`.venv/`, `.git/`, `dist/`, `node_modules/`, …) rather than replacing them; a `!pattern` entry re-includes a default. `__pycache__` is *not* a ty default, hence the explicit entry.
+- **`environment.python-platform = "linux"`** keeps local diagnostics identical to CI and the container; without it ty assumes the host platform. `python-version` is intentionally left to ty's inference from `project.requires-python`.
+- **Do not add `analysis.strict-literal-narrowing`.** It is valid on the pinned ty (0.0.59) but was renamed `strict-equality-semantics` upstream, and an unknown key is a hard TOML parse error - it would break `ty check` the moment the pin moves. Revisit when bumping ty.
+- **Relax per-path with `[[tool.ty.overrides]]`**, never by loosening the global rules. Later overrides win; `exclude` beats `include`.
+- `ty check` takes **no path argument** anywhere (Makefile, pre-commit, CI): CLI paths bypass `[tool.ty.src]` include/exclude.
+- New method overrides need `@override` (`missing-override-decorator = "error"`, PEP 698).
 
 ## Makefile layout
 

@@ -12,19 +12,28 @@ paths:
 
 Starlette applies middleware in **LIFO** order (last added = outermost). Keep CORS outermost so `OPTIONS` preflight is answered before redirects/compression.
 
-Documented request flow: **CORS → RequestID → (optional HTTPS redirect) → GZip → routes**.
+Documented request flow:
+**CORS → RequestID → SecurityHeaders → TrustedHost → (optional HTTPS redirect) → GZip → routes**.
+
+Three orderings are load-bearing:
+- **CORS outermost** - preflight answered before any redirect/compression.
+- **TrustedHost before HTTPSRedirect** - the redirect builds `Location` from `Host`; validating first is what prevents an open redirect.
+- **SecurityHeaders outside TrustedHost/HTTPSRedirect** - so their short-circuit 400/307 responses carry the headers too.
 
 The stack is registered by `configure_middleware(app, settings)` (`app/middlewares/setup.py`), not inline in `main.py`. `RequestIDMiddleware` (`app/middlewares/request_id.py`, pure ASGI) assigns/propagates an `X-Request-ID` per request and exposes it via `get_request_id()` for logging. Pure ASGI (not `BaseHTTPMiddleware`) so the `ContextVar` propagates downstream.
 
 ## Security
 
-- CORS origins/credentials are settings-driven (`ALLOWED_ORIGINS`, `ALLOW_CREDENTIALS` in `app/core/config.py`): default allow-all for local dev - **restrict in production**. Wildcard origins combined with credentials is rejected at startup.
+- CORS origins/credentials are settings-driven (`ALLOWED_ORIGINS`, `ALLOW_CREDENTIALS` in `app/core/config.py`): default allow-all for local dev. Wildcard + credentials is rejected at startup, and `ENVIRONMENT=production` rejects wildcard outright - no prose-only warning.
+- `TrustedHostMiddleware` validates `Host` from `ALLOWED_HOSTS`. `SecurityHeadersMiddleware` (`app/middlewares/security_headers.py`, pure ASGI) adds nosniff / DENY / no-referrer / COOP, plus HSTS when `FORCE_HTTPS`. It uses `setdefault`, so a route may override.
+- **Inbound `X-Request-ID` is untrusted input.** `_coerce_request_id` accepts only `[A-Za-z0-9._:@/+=-]{1,128}` and otherwise substitutes a fresh UUID - it lands in log lines and a response header, so an unvalidated value is a log-forging vector.
 - Do not log secrets, raw API keys, or full auth headers.
 
 ## Lifespan
 
 - Configure aiocache (or other process-wide async resources) in lifespan setup/teardown.
 - Avoid mutable global per-request state; use FastAPI dependencies / request context.
+- **`app.state` is an untyped `Any` bag** (Starlette's `State.__getattr__`), so a plain `app.state.foo` read satisfies *any* annotation and no ty setting can catch a wrong one. Give each entry a typed setter/getter pair - see `set_http_client` / `get_http_client` in `app/core/http_client.py`: the setter keeps writes checked, the getter re-establishes the type with `isinstance` and raises a `CoreError` when the lifespan never ran. Hold the resource in a **local** for teardown (`await http_client.aclose()`), never `await app.state.x.aclose()`, which is an unchecked call on `Any`.
 
 ## Exception handler
 

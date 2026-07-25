@@ -1,6 +1,7 @@
 import asyncio
 import secrets
 from collections.abc import Awaitable, Callable
+from functools import wraps
 from time import sleep
 from typing import ParamSpec, TypeVar
 
@@ -36,19 +37,19 @@ def _is_event_loop_running() -> bool:
     return True
 
 
-def _should_raise(
+def _should_stop(
     exc: Exception,
     attempt: int,
     max_retries: int,
-    raises_on_exception: bool,
     non_retry_exceptions: tuple[type[Exception], ...],
 ) -> bool:
-    """Return True when the caught exception should be re-raised."""  # pragma: no cover
-    if not raises_on_exception:
-        return False
-    return attempt == max_retries - 1 or (
-        bool(non_retry_exceptions) and isinstance(exc, non_retry_exceptions)
-    )
+    """Return True when no further attempt should be made.
+
+    Deliberately independent of `raises_on_exception`: whether to keep trying and whether to re-raise are separate questions. Conflating them meant `raises_on_exception=False` silently ignored `non_retry_exceptions` and kept retrying an error marked as not worth retrying.
+    """  # pragma: no cover
+    if non_retry_exceptions and isinstance(exc, non_retry_exceptions):
+        return True
+    return attempt >= max_retries - 1
 
 
 def retry(
@@ -70,6 +71,11 @@ def retry(
     """
 
     def decorator(func: Callable[P, R]) -> Callable[P, R | None]:
+        # `wraps` is required, not cosmetic: without it the wrapper exposes
+        # `(*args: P.args, **kwargs: P.kwargs)` and FastAPI rejects any decorated path operation
+        # with `FastAPIError: Invalid args for response field! ... check that P.args is a valid
+        # Pydantic field type`. It also restores __name__/__doc__/__wrapped__ for introspection.
+        @wraps(func)
         def wrapper(*args: P.args, **kwargs: P.kwargs) -> R | None:
             if _is_event_loop_running():
                 raise RuntimeError(
@@ -79,13 +85,16 @@ def retry(
                 try:
                     result = func(*args, **kwargs)
                 except Exception as e:
-                    if _should_raise(e, i, max_retries, raises_on_exception, non_retry_exceptions):
-                        raise
+                    if _should_stop(e, i, max_retries, non_retry_exceptions):
+                        if raises_on_exception:
+                            raise
+                        return None
                     if sleep_time:
                         sleep(_compute_retry_delay(sleep_time, i))
                 else:
                     return result
 
+            # Only reachable when max_retries < 1, i.e. the body never ran.
             return None
 
         return wrapper
@@ -112,18 +121,22 @@ def async_retry(
     """
 
     def decorator(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R | None]]:
+        @wraps(func)
         async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R | None:
             for i in range(max_retries):
                 try:
                     result = await func(*args, **kwargs)
                 except Exception as e:
-                    if _should_raise(e, i, max_retries, raises_on_exception, non_retry_exceptions):
-                        raise
+                    if _should_stop(e, i, max_retries, non_retry_exceptions):
+                        if raises_on_exception:
+                            raise
+                        return None
                     if sleep_time:
                         await asyncio.sleep(_compute_retry_delay(sleep_time, i))
                 else:
                     return result
 
+            # Only reachable when max_retries < 1, i.e. the body never ran.
             return None
 
         return wrapper

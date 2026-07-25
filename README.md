@@ -36,18 +36,24 @@ Use the Makefile and **uv** for dependency management and day-to-day commands.
 │   │       │   └── base.py          # Health check endpoints (ping, health)
 │   │       └── router.py            # API router configuration
 │   ├── core/
-│   │   └── config.py                # Application settings and configuration
+│   │   ├── config.py                # Application settings and configuration
+│   │   ├── http_client.py           # Shared lifespan-scoped httpx2.AsyncClient (typed accessors)
+│   │   ├── logging_config.py        # dictConfig + request-ID log filter / JSON formatter
+│   │   └── security.py              # require_api_key: X-API-Key dependency
 │   ├── dtos/                        # Pydantic DTOs for request/response validation
+│   │   └── error_response.py        # The single error envelope for every failure
 │   ├── enums/
+│   │   ├── environment.py           # development | staging | production
 │   │   └── error_codes.py           # Centralized error code definitions
 │   ├── exceptions/
 │   │   ├── core_exception.py        # Base exception class with structured error handling
+│   │   ├── authentication_error.py  # 401 for a missing/invalid credential
 │   │   ├── client_initialization_error.py  # Client initialization error
-│   │   └── handlers.py              # Global exception handler registration (CoreError -> JSON)
+│   │   └── handlers.py              # CoreError / validation / HTTP / catch-all -> ErrorResponse
 │   ├── middlewares/
 │   │   ├── request_id.py            # X-Request-ID correlation middleware (pure ASGI)
+│   │   ├── security_headers.py      # nosniff / DENY / no-referrer / COOP (+ HSTS)
 │   │   └── setup.py                 # configure_middleware(): the LIFO middleware stack
-│   ├── services/                    # Business-logic layer (thin handlers delegate here)
 │   ├── utils/
 │   │   └── decorators.py            # Utility decorators (retry, async_retry)
 │   └── main.py                      # create_app() factory, middleware/handlers, lifespan
@@ -69,13 +75,63 @@ Use the Makefile and **uv** for dependency management and day-to-day commands.
 
 ### Required Environment Variables
 
-The application uses Pydantic Settings for configuration management. Required environment variables (defined in `app/core/config.py`):
+The application uses Pydantic Settings for configuration management. Field names map to environment variables case-insensitively, so `api_key` reads `API_KEY`; only `name` carries an alias (`APP_NAME`). All settings live in `app/core/config.py`.
 
-- `APP_NAME` (default: "Backend") - Application name
-- `API_KEY` - API key for authentication
-- `API_CLIENT` - API client identifier
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `ENVIRONMENT` | `development` | `development` \| `staging` \| `production`. Production enforces the guards below. |
+| `APP_NAME` | `Backend` | Application name (OpenAPI title). |
+| `API_KEY` | *(empty)* | Shared secret checked by `require_api_key`. |
+| `API_CLIENT` | *(empty)* | API client identifier. |
+| `ALLOWED_ORIGINS` | `*` | Comma-separated CORS origins. |
+| `ALLOW_CREDENTIALS` | `false` | Allow credentialed CORS. Never valid together with `*` origins. |
+| `ALLOWED_HOSTS` | `*` | Comma-separated `Host` allowlist (`TrustedHostMiddleware`). |
+| `DOCS_ENABLED` | *(auto)* | Unset ⇒ on outside production, off in production. Explicit value always wins. |
+| `FORCE_HTTPS` | `false` | Redirect HTTP→HTTPS and send HSTS. |
+| `ROOT_PATH` | *(empty)* | ASGI `root_path` when a proxy serves the app under a sub-path. |
+| `LOG_LEVEL` | `INFO` | Standard level name. |
+| `LOG_JSON` | `false` | Emit one JSON object per log record. |
 
-> Note: The API key and API client identifier are not used in this template but are included for future use and example purposes.
+### Production fails closed
+
+With `ENVIRONMENT=production`, the app **refuses to start** unless you replace the permissive template defaults - a misconfiguration becomes a startup error with a precise message rather than a silently insecure deployment:
+
+- `ALLOWED_ORIGINS` must list explicit origins (not `*`)
+- `ALLOWED_HOSTS` must list explicit hostnames (not `*`)
+- `API_KEY` must be set
+
+`/docs`, `/redoc` and `/openapi.json` are also disabled in production unless `DOCS_ENABLED=true`.
+
+### Authentication
+
+`API_KEY` is enforced by `require_api_key` (`app/core/security.py`), which compares in constant time and reports failures through the standard error envelope. It is **not** applied globally, because the health probes must stay unauthenticated. Apply it where you need it:
+
+```python
+from fastapi import APIRouter, Depends
+from app.core.security import require_api_key
+
+router = APIRouter(dependencies=[Depends(require_api_key)])
+```
+
+### Error responses
+
+Every failure - domain `CoreError`, request validation, a bare `HTTPException`, or an unhandled exception - returns the same `ErrorResponse` shape (`app/dtos/error_response.py`), documented in OpenAPI:
+
+```json
+{
+  "error": "RequestValidationError",
+  "message": "Request validation failed.",
+  "code": "VALIDATION_ERROR",
+  "details": [{"type": "int_parsing", "loc": ["query", "n"], "msg": "..."}],
+  "request_id": "0f9c1d2e3a4b5c6d7e8f9a0b1c2d3e4f"
+}
+```
+
+`details` is withheld on 5xx responses (it describes an internal failure and is logged instead), and `request_id` always matches the `X-Request-ID` response header.
+
+### Behind a proxy
+
+The image sets `FORWARDED_ALLOW_IPS` to the RFC1918 ranges so `X-Forwarded-For` / `X-Forwarded-Proto` from a sidecar proxy (the `cloudflared` service) are honoured. uvicorn's default trusts only `127.0.0.1`, which never matches another container - leaving `request.client.host` wrong and making `FORCE_HTTPS` redirect-loop. Override per deployment if your proxy sits elsewhere.
 
 ### Telemetry and tooling
 

@@ -34,8 +34,6 @@ class CoreError(Exception):
     ) -> None:
         """Initialize a CoreError instance with an error message, code, and optional details.
 
-        The error is logged automatically when an instance is created.
-
         Args:
             message (str): The error message.
             code (ErrorCodes): A predefined error code representing the error type.
@@ -54,38 +52,18 @@ class CoreError(Exception):
             str: A formatted string describing the error.
 
         Example:
-            >>> error = CoreError("Invalid input", ErrorCodes.INVALID_INPUT, {"field": "email"})
+            >>> error = CoreError(
+            ...     "Validation failed",
+            ...     ErrorCodes.VALIDATION_ERROR,
+            ...     {"field": "email"},
+            ... )
             >>> print(str(error))
-            "CoreError: Invalid input [Code: INVALID_INPUT] Details: {'field': 'email'}"
+            "CoreError: Validation failed [Code: VALIDATION_ERROR] Details: {'field': 'email'}"
         """
         detail_part = f" Details: {self.details}" if self.details else ""
         return f"{self.__class__.__name__}: {self.message} [Code: {self.code}]{detail_part}"
 
-    def to_dict(self) -> dict[str, Any]:
-        """Convert the CoreError instance into a dictionary format.
-
-        This is useful for structured logging or returning errors in API responses.
-
-        Returns:
-            dict[str, Any]: A dictionary containing error details.
-
-        Example:
-            >>> error = CoreError(
-            ...     "Access denied",
-            ...     ErrorCodes.PERMISSION_DENIED,
-            ...     "User lacks admin rights",
-            ... )
-            >>> error.to_dict()
-            {
-                "error": "CoreError",
-                "message": "Access denied",
-                "code": "PERMISSION_DENIED",
-                "details": "User lacks admin rights"
-            }
-        """
-        return {
-            "error": self.__class__.__name__,
-            "message": self.message,
-            "code": self.code,
-            "details": self.details or {},
-        }
+    # No `to_dict()`: the client-facing shape has exactly one owner,
+    # `app.dtos.error_response.ErrorResponse`, built by the handlers in
+    # `app/exceptions/handlers.py`. A second serializer here drifted from it silently - it had no
+    # `request_id`, and it echoed `details` on 5xx responses, which the handler now withholds.
