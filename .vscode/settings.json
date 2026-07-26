@@ -117,6 +117,7 @@
     "Buildx",
     "certifi",
     "charliermarsh",
+    "chdirs",
     "classmethod",
     "cloudflare",
     "cloudflared",

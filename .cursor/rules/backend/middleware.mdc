@@ -6,35 +6,47 @@ alwaysApply: false
 
 # Middleware and App Entry
 
-`app/main.py`'s `create_app()` factory assembles the app - middleware, exception handlers, the versioned router, and lifespan - and exposes the module-level `app = create_app()` served as `app.main:app`.
+`create_app()` in `app/main.py` assembles everything - middleware, exception handlers, the versioned
+router, lifespan - and the module-level `app = create_app()` is what `app.main:app` serves. The stack is
+registered by `configure_middleware(app, settings)` in `app/middlewares/setup.py`, never inline in
+`main.py`.
 
 ## Middleware order
 
-Starlette applies middleware in **LIFO** order (last added = outermost). Keep CORS outermost so `OPTIONS` preflight is answered before redirects/compression.
+Starlette applies middleware **LIFO** (last added = outermost). Read `setup.py` for the current order.
+Three orderings are load-bearing and must not be "tidied":
 
-Documented request flow:
-**CORS → RequestID → SecurityHeaders → TrustedHost → (optional HTTPS redirect) → GZip → routes**.
+- **CORS outermost** - preflight answered before any redirect or compression.
+- **TrustedHost before HTTPSRedirect** - the redirect builds `Location` from `Host`; validating first is
+  what prevents an open redirect.
+- **SecurityHeaders outside both** - so their short-circuit 400/307 responses still carry the headers.
 
-Three orderings are load-bearing:
-- **CORS outermost** - preflight answered before any redirect/compression.
-- **TrustedHost before HTTPSRedirect** - the redirect builds `Location` from `Host`; validating first is what prevents an open redirect.
-- **SecurityHeaders outside TrustedHost/HTTPSRedirect** - so their short-circuit 400/307 responses carry the headers too.
-
-The stack is registered by `configure_middleware(app, settings)` (`app/middlewares/setup.py`), not inline in `main.py`. `RequestIDMiddleware` (`app/middlewares/request_id.py`, pure ASGI) assigns/propagates an `X-Request-ID` per request and exposes it via `get_request_id()` for logging. Pure ASGI (not `BaseHTTPMiddleware`) so the `ContextVar` propagates downstream.
+`RequestIDMiddleware` and `SecurityHeadersMiddleware` are **pure ASGI, not `BaseHTTPMiddleware`** - the
+former deliberately so, because its `ContextVar` has to propagate downstream, which `BaseHTTPMiddleware`
+breaks.
 
 ## Security
 
-- CORS origins/credentials are settings-driven (`ALLOWED_ORIGINS`, `ALLOW_CREDENTIALS` in `app/core/config.py`): default allow-all for local dev. Wildcard + credentials is rejected at startup, and `ENVIRONMENT=production` rejects wildcard outright - no prose-only warning.
-- `TrustedHostMiddleware` validates `Host` from `ALLOWED_HOSTS`. `SecurityHeadersMiddleware` (`app/middlewares/security_headers.py`, pure ASGI) adds nosniff / DENY / no-referrer / COOP, plus HSTS when `FORCE_HTTPS`. It uses `setdefault`, so a route may override.
-- **Inbound `X-Request-ID` is untrusted input.** `_coerce_request_id` accepts only `[A-Za-z0-9._:@/+=-]{1,128}` and otherwise substitutes a fresh UUID - it lands in log lines and a response header, so an unvalidated value is a log-forging vector.
-- Do not log secrets, raw API keys, or full auth headers.
+- CORS origins and credentials are settings-driven and **default to allow-all for local dev**. Wildcard +
+  credentials is rejected at startup, and `ENVIRONMENT=production` rejects wildcard outright - the guard is
+  in code, not a comment.
+- `SecurityHeadersMiddleware` uses `setdefault`, so an individual route may override a header.
+- **Inbound `X-Request-ID` is untrusted input.** `_coerce_request_id` accepts only
+  `[A-Za-z0-9._:@/+=-]{1,128}` and otherwise substitutes a fresh UUID. The value reaches log lines and a
+  response header, so an unvalidated one is a log-forging vector.
+- Never log secrets, raw API keys, or full auth headers.
 
 ## Lifespan
 
-- Configure aiocache (or other process-wide async resources) in lifespan setup/teardown.
-- Avoid mutable global per-request state; use FastAPI dependencies / request context.
-- **`app.state` is an untyped `Any` bag** (Starlette's `State.__getattr__`), so a plain `app.state.foo` read satisfies *any* annotation and no ty setting can catch a wrong one. Give each entry a typed setter/getter pair - see `set_http_client` / `get_http_client` in `app/core/http_client.py`: the setter keeps writes checked, the getter re-establishes the type with `isinstance` and raises a `CoreError` when the lifespan never ran. Hold the resource in a **local** for teardown (`await http_client.aclose()`), never `await app.state.x.aclose()`, which is an unchecked call on `Any`.
+- Configure aiocache and other process-wide async resources in lifespan setup/teardown. Avoid mutable global
+  per-request state - use dependencies or request context.
+- **`app.state` is an untyped `Any` bag** (Starlette's `State.__getattr__`), so a plain `app.state.foo` read
+  satisfies *any* annotation and no ty setting can catch a wrong one. Give each entry a typed setter/getter
+  pair - see `set_http_client` / `get_http_client` in `app/core/http_client.py`: the setter keeps writes
+  checked, the getter re-establishes the type with `isinstance` and raises a `CoreError` when the lifespan
+  never ran.
+- **Hold the resource in a local for teardown** (`await http_client.aclose()`). Never
+  `await app.state.x.aclose()` - that is an unchecked call on `Any`.
 
-## Exception handler
-
-The `CoreError` handler lives in `app/exceptions/handlers.py` and is registered via `register_exception_handlers(app)` (called by `create_app()`). Keep it returning structured JSON, tagged with the request's `X-Request-ID` for correlation. When adding error types that need special status codes, update the handler or class-level `http_status_code` in the same change.
+Exception handlers are registered by `register_exception_handlers(app)`; the envelope and status mapping live
+in `backend/exceptions`.

@@ -1,0 +1,28 @@
+---
+description: Ruff-owned Python style and naming - no floating work, absolute imports, DTO/error/enum name contracts
+globs: app/**/*.py,tests/**/*.py
+alwaysApply: false
+---
+
+# Python Style and Naming
+
+Ruff owns format and lint via `[tool.ruff]` in `pyproject.toml` - do not fight the formatter. Line
+length, quote style, import grouping, function-size limits and PEP 8 naming are all configured there and
+enforced by the `N`, `I`, `ANN` and `PL` rulesets. Read the config when you need a value; a copy of it
+here would only go stale. The `PostToolUse` hook runs `ruff format` + `ruff check` after every edit, so
+you do not need to be told to run it.
+
+## Not enforced by a linter - which is why these are written down
+
+- **No floating work.** Always `await` an async call, or return the coroutine to the caller. A dropped
+  coroutine fails silently at runtime, not at lint time.
+- **Absolute imports from `app.*` only** (`ban-relative-imports = "all"`).
+- **Prefer explicit over clever.** `max-statements`/`max-complexity` catch the extremes; taste covers the
+  rest.
+- **Names carry contract meaning**, so they are not free choices:
+  - Response/request models: `{Name}Response` / `{Name}Request` (e.g. `PingResponse`) in `app/dtos/`.
+  - Exception classes: `{Name}Error` subclassing `CoreError` in `app/exceptions/`.
+  - Enum members: `UPPER_SNAKE_CASE` on a `PascalCase` class (e.g.
+    `ErrorCodes.CLIENT_INITIALIZATION_ERROR`).
+  - Settings fields must match the env var they read - see `backend/settings-config`.
+- **Markdown, rule and hook script filenames are `kebab-case`.**

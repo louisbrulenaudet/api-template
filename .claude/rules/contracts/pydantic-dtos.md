@@ -18,7 +18,8 @@ Pydantic v2 models are the sole wire-shape source of truth. Load the `pydantic-b
 
 - No business logic in DTO modules - shapes and validation only.
 - Use `Field(...)` with clear descriptions for OpenAPI.
-- Keep error messages client-safe: no internal paths, stack traces, or secrets.
+- Keep validation error messages client-safe, to the standard in
+  [exceptions.md](../backend/exceptions.md).
 - Prefer additive field changes. Breaking changes need a deliberate API version / migration and consumer updates in the same PR.
 
 ## Validators

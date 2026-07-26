@@ -5,12 +5,23 @@ paths:
 
 # FastAPI Routes
 
-API handlers live under `app/api/`. Load the `fastapi` skill for current FastAPI patterns.
+Handlers live under `app/api/`, mounted under `/api/v1`. Load the `fastapi` skill for current framework
+patterns.
+
+## Template surface
+
+`GET /api/v1/ping` → `PingResponse` · `GET /api/v1/health` → `HealthResponse`. Both stay
+**unauthenticated** - Docker/K8s probes call them, so adding auth breaks container health checks.
+
+Protect a router with `APIRouter(dependencies=[Depends(require_api_key)])`
+(`app/core/security.py`) - per-router, not per-handler.
 
 ## Validation at the boundary
 
-- Validate **every** path, query, and body input with Pydantic / FastAPI params - not bare untyped values for API inputs.
-- Prefer `Annotated[..., Path()]`, `Annotated[..., Query()]`, `Annotated[..., Body()]` (or a dedicated request model) with constraints and descriptions.
+- Validate **every** path, query and body input with Pydantic / FastAPI params - never a bare untyped value
+  on an API input.
+- Prefer `Annotated[..., Path()]`, `Annotated[..., Query()]`, `Annotated[..., Body()]` (or a dedicated
+  request model) with constraints and descriptions.
 - Declare return types and/or `response_model=` so OpenAPI stays accurate.
 
 ```python
@@ -24,26 +35,19 @@ async def list_items(
 ) -> ItemListResponse: ...
 ```
 
-## Thin handlers
+## Handler shape
 
 1. Validate inputs (framework + Pydantic).
 2. Resolve dependencies (`Annotated[..., Depends(...)]`).
-3. Call service logic in `app/services/`.
+3. Call service logic - see [services.md](services.md) for what belongs there.
 4. Return a DTO.
 
-No business logic inline in route modules. Prefer `async def` for I/O; never block the event loop.
+Prefer `async def` for I/O and never block the event loop: one synchronous call in an `async` handler stalls
+every concurrent request, not just its own.
 
-## Errors and status codes
+## Errors
 
-- Raise `CoreError` subclasses for domain failures; let the global handler map status codes.
-- Typical HTTP mapping: 400 validation/domain, 401/403 auth, 404 not found, 500 unexpected.
-- Never put secrets or stack traces in client-facing `details`.
+Raise `CoreError` subclasses and let the global handler map the status code; see
+[exceptions.md](exceptions.md) for the envelope and for what may appear in `details`.
 
-## Organization
-
-- Keep routers modular; mount under `/api/v1` via `app/api/v1/router.py`.
-- RESTful paths: plural nouns; verbs via HTTP method.
-
-## Before finishing
-
-Run `make check` and the affected tests (`uv run pytest tests/...`).
+RESTful paths: plural nouns, verbs expressed by HTTP method.

@@ -1,3 +1,13 @@
 # Gitignored files to copy into Claude Code / --worktree checkouts.
 # Do not list secrets you are unwilling to duplicate onto disk in worktrees.
-.env
+#
+# `.env` is deliberately NOT listed. A subagent worktree is auto-removed only if the
+# subagent made no changes; otherwise it waits for a sweep older than `cleanupPeriodDays`
+# (20), and that sweep skips any worktree still holding work - so a listed `.env` would
+# sit in plaintext under .claude/worktrees/ for up to 20 days, gitignored and therefore
+# invisible to review.
+#
+# Nothing in the verification path needs it: tests/conftest.py uses `model_validate` so
+# `.env` cannot decide whether the suite passes, tests/test_config.py chdirs to a tmpdir
+# and clears every key, and `make test` / `make check` / `make type-check` never read it.
+# Only `make dev` / `make prod` do - copy `.env` into the worktree by hand for those.

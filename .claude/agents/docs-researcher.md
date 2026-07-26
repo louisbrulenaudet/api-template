@@ -2,7 +2,10 @@
 name: docs-researcher
 description: Use PROACTIVELY to look up external library / framework / SDK / API documentation (FastAPI, Pydantic, uv, Ruff, httpx2, pytest, Starlette, Uvicorn) via Context7 and the web, and return ONLY the distilled answer with citations. Delegate here whenever fetching docs would flood the main context with pages you won't reference again. Returns the exact API/config snippet + source URL. Never edits code.
 tools: Read, Grep, Glob, WebFetch, WebSearch, mcp__context7__resolve-library-id, mcp__context7__query-docs
+mcpServers: [context7]
 model: sonnet
+effort: medium
+maxTurns: 14
 color: blue
 ---
 
@@ -25,4 +28,4 @@ Ground answers in fetched sources; do not answer library-API questions from memo
 - **Answer**: the concrete API/config/snippet that resolves the question (minimal, correct, version-appropriate).
 - **Source(s)**: URL(s) or Context7 library id backing each claim.
 - **Caveats**: version constraints, deprecations, or "not found in docs" notes.
-- Never paste whole pages or unrelated sections.
+- **≤25 lines total.** Never paste whole pages or unrelated sections.

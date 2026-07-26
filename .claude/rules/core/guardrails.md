@@ -1,41 +1,34 @@
----
----
-
 # Guardrails
 
-These apply to every change, everywhere. They are hard "don'ts" - when one would be violated, stop and ask rather than proceed.
+The only always-on rule (no `paths:`), so keep it short. Applies to every change in every session.
 
-## Never commit secrets
+## Already enforced - you will be blocked, not trusted
 
-Do not commit credentials, API keys, tokens, private keys, `.env*` files, database dumps, or logs that contain any of those. A secret you generated for local use stays out of version control.
+`permissions.deny` covers reads/writes of `.env`, keys, credentials, `.netrc`, `.pypirc`, caches,
+`htmlcov/`, `.coverage`, `.git/`, and `uv.lock`. `hooks/git/` blocks staging a secret (fails closed),
+`reset --hard`, `clean -f`, `push --force`, `checkout --`, branch/tag deletion, and any commit or push on
+the default branch. Do not route around a block: if one fires, stop and report it.
 
-## Destructive or irreversible actions - ask first
+## Your judgement, because nothing enforces it
 
-- Do not run history-rewriting or working-tree-destroying commands (`git reset --hard`, `git checkout -- <path>`, `git clean -f`, `git push --force`, branch/tag deletion) unless the user asked for that exact operation. Prefer additive, reversible steps.
-- Commit or push only when asked, and never directly to the default branch.
-- Before deleting or overwriting a file you did not create, look at it first; if its contents contradict how it was described, surface that instead of proceeding.
-
-## Generated files are outputs, not sources
-
-Never hand-edit generated or lock artifacts except through the documented command. Change the source of truth and regenerate:
-
-- `uv.lock` → `make lock` / `uv lock` (do not hand-edit)
-- Docker image layers / compose runtime state → rebuild via Makefile targets
-- Coverage HTML under `htmlcov/` → regenerate via tests
-
-## Stay within the task's scope
-
-A task scoped to configuration, rules, docs, or agent setup must not drift into application source, Docker manifests, or CI unless the user asks. Narrow the blast radius to what was requested.
-
-## One source of truth
-
-Never duplicate a shared Pydantic DTO or `ErrorCodes` member. See [pydantic-dtos.md](../contracts/pydantic-dtos.md).
-
-## Least privilege for model-facing surfaces
-
-When exposing an operation to a model or an untrusted external caller, keep it read/query-oriented. Never expose a surface that creates, rotates, or deletes long-lived credentials, or that performs any other irreversible privileged action on the caller's behalf.
+- A secret you generated locally stays out of version control, whatever its filename.
+- Commit or push only when asked - never as a side effect of finishing something else.
+- Before deleting or overwriting a file you did not create, read it. If its contents contradict how it was
+  described to you, surface that instead of proceeding.
+- Regenerate generated artifacts via their documented command (`make lock`, Makefile docker targets,
+  tests for `htmlcov/`); never hand-patch the output.
+- Keep a task inside its scope: config, rules, docs, or agent setup must not drift into application
+  source, Docker manifests, or CI unless asked.
+- Define a shared DTO or `ErrorCodes` member once and import it - see `contracts/pydantic-dtos`.
+- Keep model-facing and untrusted-caller surfaces read/query-oriented. Never expose one that creates,
+  rotates, or deletes long-lived credentials, or takes any other irreversible privileged action.
 
 ## Do not paper over failures
 
-- Never silence a failing check to make it pass: do not disable a Ruff rule, add a blanket `# noqa`, use `Any` / `type: ignore` to clear an error, or skip a test without cause. Fix the root cause.
-- Do not ignore failing validation, type errors, or tests. Either fix them, or stop and report the exact command run and its output.
+Stated once, here, because every other rule used to repeat it. It is absolute.
+
+Never silence a failing check to reach green - not by disabling a Ruff rule, a blanket `# noqa`, an `Any`,
+a `# ty: ignore` added to clear an error, a skipped test, or a weakened source file, test, CI step, or
+lint/type gate. Fix the cause. A suppression needs a stated reason and is a last resort. If you cannot fix
+it, stop and report the exact command and its output: a failure you reported is a good outcome, a failure
+you hid is not.

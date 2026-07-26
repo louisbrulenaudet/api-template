@@ -36,7 +36,12 @@
       "Bash(rm -rf *)",
       "Bash(sudo *)",
       "Read(**/.env)",
-      "Read(**/.env.*)",
+      "Read(**/.env.local)",
+      "Read(**/.env.*.local)",
+      "Read(**/.env.development)",
+      "Read(**/.env.staging)",
+      "Read(**/.env.production)",
+      "Read(**/.env.test)",
       "Read(**/*.pem)",
       "Read(**/*.key)",
       "Read(**/*.crt)",
@@ -71,9 +76,30 @@
       "Edit(**/.coverage.*)",
       "Edit(**/node_modules/**)",
       "Edit(**/.git/**)",
-      "Edit(**/uv.lock)"
+      "Edit(**/uv.lock)",
+      "Edit(**/.env)",
+      "Edit(**/.env.local)",
+      "Edit(**/.env.*.local)",
+      "Edit(**/.env.development)",
+      "Edit(**/.env.staging)",
+      "Edit(**/.env.production)",
+      "Edit(**/.env.test)",
+      "Edit(**/*.pem)",
+      "Edit(**/*.key)",
+      "Edit(**/*.crt)",
+      "Edit(**/*.p12)",
+      "Edit(**/*.pfx)",
+      "Edit(**/*.keystore)",
+      "Edit(**/id_rsa)",
+      "Edit(**/id_ed25519)",
+      "Edit(**/credentials.json)",
+      "Edit(**/.pypirc)",
+      "Edit(**/.netrc)",
+      "Agent(code-simplifier:code-simplifier)",
+      "Agent(db-reader)"
     ],
     "ask": [
+      "Agent(isolation:worktree)",
       "Bash(git push:*)",
       "Bash(git commit:*)",
       "Bash(gh repo delete:*)",
@@ -93,9 +119,19 @@
             "type": "command",
             "command": "sh",
             "args": [
+              "${CLAUDE_PROJECT_DIR}/hooks/logging/audit-bash.sh"
+            ],
+            "timeout": 5,
+            "statusMessage": "Recording command in audit log"
+          },
+          {
+            "type": "command",
+            "command": "sh",
+            "args": [
               "${CLAUDE_PROJECT_DIR}/hooks/git/guard-secret-commit.sh"
             ],
-            "timeout": 10
+            "timeout": 10,
+            "statusMessage": "Checking for secret staging"
           },
           {
             "type": "command",
@@ -103,14 +139,29 @@
             "args": [
               "${CLAUDE_PROJECT_DIR}/hooks/git/guard-destructive-git.sh"
             ],
-            "timeout": 10
+            "timeout": 10,
+            "statusMessage": "Checking for destructive git"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|NotebookEdit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/hooks/security/guard-protected-path.sh"
+            ],
+            "timeout": 10,
+            "statusMessage": "Checking protected paths"
           }
         ]
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "Edit|Write",
+        "matcher": "Edit|Write|NotebookEdit",
         "hooks": [
           {
             "type": "command",
@@ -118,7 +169,52 @@
             "args": [
               "${CLAUDE_PROJECT_DIR}/hooks/quality/check-changed.sh"
             ],
-            "timeout": 30
+            "timeout": 30,
+            "statusMessage": "Formatting and linting"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/hooks/git/guard-worktree-clean.sh"
+            ],
+            "timeout": 15,
+            "statusMessage": "Checking working tree for stray secrets"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/hooks/logging/session-start.sh"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "ConfigChange": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/hooks/logging/audit-config-change.sh"
+            ],
+            "timeout": 5,
+            "statusMessage": "Auditing configuration change"
           }
         ]
       }
@@ -132,7 +228,8 @@
             "args": [
               "${CLAUDE_PROJECT_DIR}/hooks/logging/instructions-loaded.sh"
             ],
-            "timeout": 10
+            "timeout": 10,
+            "async": true
           }
         ]
       }
@@ -163,6 +260,7 @@
     }
   },
   "worktree": {
+    "baseRef": "head",
     "sparsePaths": [
       ".claude",
       "app",
@@ -182,7 +280,14 @@
   "alwaysThinkingEnabled": true,
   "autoMemoryEnabled": true,
   "cleanupPeriodDays": 20,
-  "includeGitInstructions": false,
+  "includeGitInstructions": true,
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "env": {
+    "CLAUDE_CODE_MAX_SUBAGENTS_PER_SESSION": "25"
+  },
   "enabledMcpjsonServers": [
     "context7"
   ],

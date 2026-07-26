@@ -1,0 +1,67 @@
+---
+description: Agent harness map - where Cursor and Claude Code config lives, and which ignore file to reach for
+alwaysApply: true
+---
+
+# Agent Harness
+
+Moved out of the root `AGENTS.md` so it stops costing Claude Code context on every session: Claude
+cannot act on `.cursorignore` or `.cursorindexingignore`, and this table is Cursor-facing. Cursor keeps
+it always-on here instead.
+
+| Tool | Entry | Path rules | Hooks / MCP | Shared scripts |
+|------|-------|------------|-------------|----------------|
+| Cursor | `AGENTS.md` | `.cursor/rules/**/*.mdc` | `.cursor/hooks.json`, `.cursor/mcp.json` (Context7) | `hooks/` |
+| Claude Code | `CLAUDE.md` → `@AGENTS.md` | `.claude/rules/**/*.md` | `.claude/settings.json`, `.mcp.json` (Context7) | `hooks/` |
+
+Slash review prompts: `.cursor/commands/` and `.claude/commands/` (`review-architecture`,
+`review-code-quality`, `review-configuration`, `review-performance`). Skills: `.cursor/skills/` and
+`.claude/skills/`.
+
+## Subagent roster
+
+| Agent | Both trees? | Grant | Purpose |
+|---|---|---|---|
+| `ci-verifier` | yes | shell, read-only by instruction | Ruff + ty gate, non-mutating forms only |
+| `test-runner` | yes | shell, read-only by instruction | narrowest pytest run, failures only |
+| `docs-researcher` | yes | web + Context7 only | external docs, cited |
+| `code-reviewer` | yes | read-only, **no shell** | diff vs `rules/` conformance |
+| `security-reviewer` | yes | read-only, **no shell** | secrets, fail-open config, legal-data handling |
+| `refactorer` | **Claude only** | edit, in a git worktree | repo-wide mechanical refactors |
+| `db-reader` | **Claude only**, denied | specific MCP read tools | read-only SQL pattern; inert until a DB exists |
+
+The last two are deliberately **not** mirrored to Cursor: `refactorer`'s safety is `isolation: worktree`
+and `db-reader`'s is a frontmatter `PreToolUse` guard, and neither mechanism has a verified Cursor
+equivalent. Mirroring them on name and description alone would ship the capability without the control.
+
+The two frontmatter dialects differ here too: Cursor agents take `name`, `description`, `readonly`,
+`model`; Claude agents take `tools`, `disallowedTools`, `model`, `permissionMode`, `maxTurns`, `skills`,
+`mcpServers`, `hooks`, `memory`, `background`, `effort`, `isolation`, `color`, `initialPrompt`. Port the
+intent, never copy the block.
+
+**Claude subagent privilege comes from `tools` only.** `permissionMode` in agent frontmatter is inert in
+this repo: the project `defaultMode` is `acceptEdits`, and a subagent cannot tighten below its parent's
+mode. Do not ship an agent whose safety depends on it. Conversation history, output style and auto memory
+do not reach a non-fork subagent; `CLAUDE.md` and `.claude/rules/` do, except for the built-in `Explore`
+and `Plan` agents, which skip both.
+
+Keep `.cursor/rules` and `.claude/rules` content in sync when changing conventions (dual trees, same
+intent). The two frontmatter dialects differ and do not transfer: Cursor uses
+`description:` + `globs:` + `alwaysApply:`, Claude Code uses only `paths:`.
+
+## Context path hygiene
+
+| Mechanism | Effect | Use for |
+|-----------|--------|---------|
+| `.cursorignore` | Blocks Agent, Tab, Inline Edit, `@` | Secrets + never-prompt paths (`.env`, keys, `.venv`, caches) |
+| `.cursorindexingignore` | Index only; AI can still open | Heavy/generated noise (`htmlcov/`, `uv.lock`, build artifacts) |
+| `.gitignore` | VCS + default Cursor index / Claude search | Standard ignore |
+| Claude `permissions.deny` `Read(...)` | Excludes from discovery, search, and reads | Same noise/secrets for Claude Code |
+| `.worktreeinclude` | Copies listed gitignored files into Claude worktrees | Nothing today - `.env` is deliberately **not** listed, see the file's header |
+
+Do not put index-only noise in `.cursorignore` - that over-blocks the Agent. Optional Context7 API key
+stays in user MCP / local overlay - never commit it.
+
+`permissions.deny` globs cannot express an exception. Enumerate the paths you mean rather than reaching
+for a wildcard: `Read(**/.env.*)` also matches the committed `.env.template`, and no hook allowlist can
+loosen a deny rule.

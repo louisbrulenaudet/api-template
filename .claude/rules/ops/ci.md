@@ -5,17 +5,20 @@ paths:
 
 # Continuous Integration
 
-CI lives in [`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml).
+The workflow is [`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml). Read it for the step
+list; a prose copy here would only drift out of date.
 
-## Expectations
+## What must stay true
 
-- Install with `uv sync --frozen` and run steps with `uv run --frozen` - installs `uv.lock` exactly, no re-resolve (the `dev` group is included by default). `--frozen` not `--locked`: the relative `exclude-newer` window would make `--locked` re-resolution drift over time. Pinned uv version in the workflow - bump deliberately.
-- Prefer `make ci` for local Ruff + ty; use `make test` for pytest. Keep those aligned with the matching GHA steps.
-- In GHA, run ruff / ty / pytest concurrently via the `parallel:` step group after install (shared `.venv`).
-- Docker `runtime` image build is an independent job (no `needs: test`) with Buildx GHA layer cache - do not remove without replacing coverage.
-- Never weaken CI (skip steps, ignore failures, broaden `continue-on-error`) to force green. Fix the cause. See [guardrails.md](../core/guardrails.md).
+- **`make` targets and GHA steps run the same commands.** Divergence between them is how "green locally,
+  red in CI" happens. Change both in one edit.
+- **Installs use `--frozen`, never `--locked`** - see `quality/python-tooling.md` for why the relative
+  `exclude-newer` window makes `--locked` drift. The uv version is pinned in the workflow; bump it
+  deliberately.
+- **The Docker `runtime` build is an independent job** (deliberately no `needs: test`) with a Buildx GHA
+  layer cache. Do not drop it without replacing the coverage it gives.
+- **Production secrets never live in workflow files.** Use GitHub Actions secrets / environments, and keep
+  Logfire send flags off unless the run is explicitly testing telemetry.
 
-## Secrets
-
-- Do not put production secrets in workflow files. Use GitHub Actions secrets / environments.
-- Keep Logfire send flags off in CI unless explicitly testing telemetry.
+Weakening a CI gate to force green is covered by [guardrails.md](../core/guardrails.md) and is never the
+answer here either.
