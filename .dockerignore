@@ -15,3 +15,32 @@
 # …but never ship host bytecode caches that slipped into the allowlisted app/ tree.
 app/**/__pycache__
 app/**/*.pyc
+
+# dotenv, in every naming convention
+app/**/.env
+app/**/.env.*
+app/**/*.env
+
+# keys, certificates and keystores
+app/**/*.pem
+app/**/*.key
+app/**/*.crt
+app/**/*.p8
+app/**/*.p12
+app/**/*.pfx
+app/**/*.jks
+app/**/*.keystore
+app/**/id_rsa*
+app/**/id_ed25519*
+app/**/id_ecdsa*
+
+# tool credential files that carry bearer tokens
+app/**/.netrc
+app/**/.npmrc
+app/**/.pypirc
+app/**/*credentials*.json
+app/**/*service-account*.json
+
+# any directory an operator would plausibly call a secret store
+app/**/secrets/**
+app/**/.secrets/**

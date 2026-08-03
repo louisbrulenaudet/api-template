@@ -62,6 +62,30 @@ elif word 'restore' && ! word '\-\-staged'; then
   REASON="git restore <path> discards uncommitted changes"
 fi
 
+# Default-branch guard. Checked after the chain above so a force-push keeps its own,
+# more specific reason. Prose in guardrails could not guarantee this; a hook can.
+# Fails open, like everything here except guard-secret-commit.sh: if git cannot name
+# the current or default branch, we do not block.
+if [ -z "$REASON" ] &&
+  printf '%s' "$CMD" |
+    grep -Eq '(^|[;&|[:space:]])git([[:space:]]+-[^[:space:]]+)*[[:space:]]+(commit|push)([[:space:]]|$)'; then
+  ROOT="${CURSOR_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-.}}"
+  CURRENT=$(git -C "$ROOT" symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+  if [ -n "$CURRENT" ]; then
+    DEFAULT=$(git -C "$ROOT" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null |
+      sed 's|^origin/||' || true)
+    [ -z "$DEFAULT" ] && DEFAULT=$(git -C "$ROOT" config --get init.defaultBranch 2>/dev/null || true)
+    if [ -z "$DEFAULT" ]; then
+      case "$CURRENT" in
+        main | master) DEFAULT="$CURRENT" ;;
+      esac
+    fi
+    if [ -n "$DEFAULT" ] && [ "$CURRENT" = "$DEFAULT" ]; then
+      REASON="this commits or pushes directly to the default branch ($DEFAULT)"
+    fi
+  fi
+fi
+
 [ -z "$REASON" ] && allow
 
 deny "Blocked: $REASON. Per .cursor/rules/core/guardrails.mdc and .claude/rules/core/guardrails.md, destructive/irreversible git operations must not run autonomously. Ask the user to confirm this exact command, and let them run it themselves if they approve."

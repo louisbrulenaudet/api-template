@@ -9,27 +9,53 @@ paths:
 
 # Python Tooling
 
-Single source of truth for tool config: [`pyproject.toml`](../../../pyproject.toml). Do not fork Ruff / ty / pytest settings into ad-hoc local copies.
+[`pyproject.toml`](../../../pyproject.toml) is the single source of truth for Ruff, ty and pytest config -
+do not fork any of it into ad-hoc local copies. `make help` lists the targets; `AGENTS.md` covers the few
+whose behaviour is not obvious.
 
 ## Package management
 
-- Canonical lockfile: `uv.lock`. Use `make sync`, `make lock`, `make update` - never hand-edit the lock.
-- **Installs use `--frozen`** (`make sync`, CI, Docker): install `uv.lock` exactly, no re-resolution. Deliberate - `exclude-newer = "7 days"` is a *relative* window, so `--locked` would re-resolve against a sliding cutoff and drift. Locking (and the freshness gate) happens only in `uv lock` / `make lock` / `make update`. Trade-off: installs don't auto-detect an un-relocked `pyproject.toml` edit - run `make lock` after changing dependencies.
-- Dev tooling (pytest, Ruff, ty, pre-commit) is the PEP 735 `[dependency-groups] dev` group, synced **by default** (no `--extra`/`--group` flag; there are no `[project.optional-dependencies]`).
-- `[tool.uv] required-version` pins the uv floor (matches the CI/Docker pin); `.python-version` pins the dev/CI interpreter within `requires-python`.
-- `requirements.txt` is an optional export only (`make export-requirements`); `uv.lock` wins.
+- **Canonical lockfile is `uv.lock`**, changed only by `make lock` / `make update`.
+- **Installs use `--frozen`** (`make sync`, CI, Docker): install `uv.lock` exactly, no re-resolution.
+  This is deliberate, and it is the one tooling decision worth understanding before you change it.
+  `exclude-newer = "7 days"` is a *relative* window, so `--locked` would re-verify the lock against a
+  cutoff that slides every day and would eventually fail on a lock that is perfectly valid. Locking and
+  the freshness gate happen only in `uv lock` / `make lock` / `make update`. **Trade-off:** installs
+  therefore cannot detect a `pyproject.toml` dependency edit that was never re-locked - run `make lock`
+  after changing dependencies.
+- Dev tooling (pytest, Ruff, ty, pre-commit) is the PEP 735 `[dependency-groups] dev` group, synced **by
+  default** - no `--extra` / `--group` flag, and there are no `[project.optional-dependencies]`.
 
-## Quality commands
+## Type safety (ty)
 
-| Command | Purpose |
-|---------|---------|
-| `make check` | `ruff check .` |
-| `make format` | `ruff format` + `ruff check --fix` |
-| `make type-check` | `ty check .` |
-| `make test` | pytest |
-| `make ci` | `format` + `type-check` (Ruff + ty; no tests) |
-| `make pre-commit` | pre-commit on all files |
+ty is the **sole** type checker and LSP. Do not add a mypy or pyright config.
+
+- **Suppressions must be `# ty: ignore[rule-name]`.** `analysis.respect-type-ignore-comments = false`, so
+  a mypy-style `# type: ignore` suppresses nothing - it is just a comment. A bare `# ty: ignore` is an
+  error (`blanket-ignore-comment`), and stale or misspelled ones fail too (`unused-ignore-comment`,
+  `ignore-comment-unknown-rule`). When a suppression is legitimate, see
+  [guardrails.md](../core/guardrails.md) for the bar it has to clear.
+- **Strictness budget.** `terminal.error-on-warning = true` makes `warn`-level rules fail the gate too, so
+  the only real lever is ty's off-by-default rules, and `[tool.ty.rules]` enables all but one of them.
+  `possibly-unresolved-reference` stays off because ty disables it for false positives. Curated-strict is
+  deliberate over `all = "error"`: a ty upgrade must not silently promote a new rule into a hard failure.
+  *(Rule counts were checked against the pinned ty 0.0.59 - re-check them, don't trust them, after a bump.)*
+- **`src.include` is an allowlist** (`["app", "tests"]`). A new top-level Python package - a `scripts/`, a
+  root `conftest.py` - is silently **unchecked** until you add it there. This is the trap most likely to
+  bite you.
+- **`src.exclude` extends** ty's built-in defaults rather than replacing them; a `!pattern` entry
+  re-includes a default. `__pycache__` is *not* a ty default, hence the explicit entry.
+- **`environment.python-platform = "linux"`** keeps local diagnostics identical to CI and the container.
+  `python-version` is intentionally left to ty's inference from `project.requires-python`.
+- **Do not add `analysis.strict-literal-narrowing`.** Valid on the pinned ty, but renamed
+  `strict-equality-semantics` upstream - and an unknown key is a hard TOML parse error, so it would break
+  `ty check` outright the moment the pin moves. Revisit when bumping ty.
+- **Relax per-path with `[[tool.ty.overrides]]`**, never by loosening the global rules. Later overrides
+  win; `exclude` beats `include`.
+- **`ty check` takes no path argument** anywhere - Makefile, pre-commit or CI. A CLI path bypasses
+  `[tool.ty.src]` include/exclude entirely.
 
 ## Makefile layout
 
-- Root `Makefile` includes `make/*.mk`. Put new targets in the right fragment (`dev.mk`, `docker.mk`, …), not as one-off shell in docs.
+The root `Makefile` includes `make/*.mk`. Put new targets in the right fragment (`dev.mk`, `docker.mk`, …),
+never as one-off shell in docs.

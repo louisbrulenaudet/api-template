@@ -5,12 +5,16 @@ PROJECT_NAME := ⚗️
 
 # FastAPI app path (override when invoking make: `make dev APP=...`)
 APP ?= app/main.py
-HOST ?= 0.0.0.0
 DEV_PORT ?= 8000
 PORT ?= 8001
 
 # Docker configuration
 APP_SERVICE := app
+TUNNEL_SERVICE := cloudflared
+TUNNEL_PROFILE := tunnel
+
+# Never inline `docker compose` in a recipe - go through this variable.
+COMPOSE := docker compose
 
 # Pydantic Logfire: do not export telemetry (defense-in-depth; applies to make dev/prod/check).
 export LOGFIRE_SEND_TO_LOGFIRE := false

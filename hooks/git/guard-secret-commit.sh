@@ -4,7 +4,14 @@
 # Canonical location: hooks/git/ - wired from .cursor/hooks.json and .claude/settings.json.
 #
 # Enforces "Never commit secrets" (guardrails). Cursor failClosed expects JSON on stdout;
-# Claude uses exit 2 + stderr. Always emit allow JSON so empty output never fail-closes.
+# Claude uses exit 2 + stderr. The allow path emits allow JSON so Cursor never sees empty output.
+#
+# Claude Code note: on exit 2 the stdout JSON is discarded and only stderr is fed back, so the
+# reason is written to BOTH streams. The stdout object exists purely for Cursor's contract.
+#
+# This guard FAILS CLOSED (unlike the other hooks in this repo, which fail open): if it cannot
+# parse its input or complete its checks, it refuses the command rather than letting a possible
+# secret through. A guard that errors is a guard that is not enforcing.
 
 set -u
 
@@ -23,9 +30,18 @@ deny() {
   exit 2
 }
 
-# Unexpected failure → allow JSON (fail-open inside the script). Cursor failClosed then
-# only blocks on explicit deny or a true hook-runner crash - never on empty stdout.
-trap 'allow' EXIT INT TERM HUP
+# Unexpected failure → refuse. Every deliberate exit path (allow / deny) clears this trap
+# first, so it only fires on a genuine fault: unset variable under `set -u`, a killed pipeline,
+# or a timeout signal. Staging a secret is not recoverable, so the safe default is "no".
+fail_closed() {
+  trap - EXIT INT TERM HUP
+  msg="Blocked: the secret-staging guard (hooks/git/guard-secret-commit.sh) could not complete, so the command is refused rather than risk staging a secret. Fix the guard, or stage specific non-secret files explicitly."
+  printf '%s\n' "$msg" >&2
+  printf '%s\n' "{\"permission\":\"deny\",\"user_message\":\"$msg\",\"agent_message\":\"$msg\"}"
+  exit 2
+}
+
+trap 'fail_closed' EXIT INT TERM HUP
 
 INPUT=$(cat 2>/dev/null || true)
 ROOT="${CURSOR_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-.}}"
@@ -38,10 +54,14 @@ fi
 
 [ -z "$CMD" ] && allow
 
-case "$CMD" in
-  *git*add*|*git*commit*) ;;
-  *) allow ;;
-esac
+# Only inspect commands that actually invoke git staging. Both words must appear as
+# whitespace-delimited tokens. The previous `*git*add*` glob matched any string merely
+# containing those letters anywhere - including this script's own path, `hooks/git/...`,
+# which blocked unrelated commands and taught users to route around the guard.
+if ! printf '%s' "$CMD" | grep -Eq '(^|[[:space:]])git([[:space:]]|$)' \
+   || ! printf '%s' "$CMD" | grep -Eq '(^|[[:space:]])(add|commit|stage)([[:space:]]|$)'; then
+  allow
+fi
 
 set -f
 
@@ -65,6 +85,13 @@ is_bulk() {
 }
 
 if is_bulk; then
+  # A bulk stage is exactly the case this guard exists for, so it cannot be waved through
+  # when the working set is unknowable. No git, no verdict, no staging.
+  command -v git >/dev/null 2>&1 \
+    || deny "Blocked: cannot verify what a bulk stage would include because git is unavailable. Stage specific files explicitly."
+  git -C "$ROOT" --no-optional-locks rev-parse --is-inside-work-tree >/dev/null 2>&1 \
+    || deny "Blocked: cannot verify what a bulk stage would include because $ROOT is not a git work tree. Stage specific files explicitly."
+
   if git -C "$ROOT" status --porcelain 2>/dev/null \
        | sed -E 's/^...//; s/^.* -> //' \
        | grep -vE '\.example([^a-z]|$)' \
