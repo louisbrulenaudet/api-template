@@ -134,6 +134,11 @@ celerybeat.pid
 # SageMath parsed files
 *.sage.py
 
+# Optional on-disk source for Compose's top-level `secrets:` element (see compose.yaml, which
+# defaults to an environment source instead). Ignored contents and all: anything here is a
+# bearer credential. The build context excludes it too - .dockerignore starts from `*`.
+secrets/
+
 # Environments
 .env
 .envrc

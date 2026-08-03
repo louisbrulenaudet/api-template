@@ -48,7 +48,7 @@ Changed files:
 <path>  (× k sites)
 
 Skipped (need a decision):
-<path>:<line> — why
+<path>:<line> - why
 
 Verification: re-grep for '<old form>' returned N matches
 ```

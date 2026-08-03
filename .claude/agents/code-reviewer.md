@@ -42,7 +42,7 @@ at large - the diff bounds your scope.
 ## Output contract
 
 ```
-<file>:<line> — <rule file> — <violation>
+<file>:<line> - <rule file> - <violation>
 
 Rules: PASS  |  FAIL (N)
 ```

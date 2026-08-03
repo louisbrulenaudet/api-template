@@ -237,7 +237,7 @@
   },
   "enabledPlugins": {
     "security-guidance@claude-plugins-official": true,
-    "python-lsp@claude-plugins-official": true,
+    "pyright-lsp@claude-plugins-official": true,
     "skill-creator@claude-plugins-official": true,
     "code-simplifier@claude-plugins-official": true,
     "github@claude-plugins-official": true,

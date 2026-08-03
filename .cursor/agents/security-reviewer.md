@@ -66,7 +66,7 @@ Flag any of these as **Critical**:
 ## Output contract
 
 ```
-<file>:<line> — <category> — <defect> — <concrete exploit or disclosure path>
+<file>:<line> - <category> - <defect> - <concrete exploit or disclosure path>
 
 Security: PASS  |  FAIL (N critical, M improvements)
 ```

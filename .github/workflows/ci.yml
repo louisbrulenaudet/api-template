@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  actions: write
 
 env:
   LOGFIRE_SEND_TO_LOGFIRE: "false"
@@ -43,12 +42,36 @@ jobs:
         run: uv sync --frozen
 
       - parallel:
-          - name: Run lint with ruff
+          - name: Check formatting with Ruff
+            run: uv run --frozen ruff format --check .
+
+          - name: Lint with Ruff
             run: uv run --frozen ruff check .
-          - name: Run type check with ty
+
+          - name: Type check with ty
             run: uv run --frozen ty check --output-format github
+
           - name: Run tests with pytest
             run: uv run --frozen pytest -q
+
+  docker-lint:
+    name: Dockerfile and Compose validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - parallel:
+          - name: Run Docker build checks
+            run: make docker-check-build
+
+          - name: Validate Compose
+            run: make docker-config
 
   docker-build:
     name: Build runtime image
@@ -62,12 +85,30 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      # `load: true` imports into the local daemon so the smoke test steps below can run the image.
       - name: Build runtime image
         uses: docker/build-push-action@v7
         with:
           context: .
           target: runtime
           push: false
-          tags: backend:runtime
+          load: true
+          tags: api-template:runtime
+          # The commit SHA, not `github.ref_name`: a ref name is attacker-influenceable and may
+          # legally contain shell metacharacters, so using it would require sanitizing it first. A
+          # SHA needs none, and it is the more useful provenance value anyway.
+          build-args: |
+            APP_VERSION=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Smoke test the runtime image
+        uses: ./.github/actions/smoke-test-image
+        with:
+          image: api-template:runtime
+          port: "8001"
+
+      - name: Assert no credentials baked into image layers
+        uses: ./.github/actions/assert-no-baked-credentials
+        with:
+          image: api-template:runtime

@@ -1,4 +1,6 @@
-.PHONY: docker-check docker-build docker-rebuild docker-start docker-stop docker-restart docker-logs docker-clean docker-run-dev docker-run-dev-tunnel docker-tunnel-logs docker-tunnel-stop
+.PHONY: docker-check docker-check-build docker-config docker-build docker-rebuild \
+	docker-start docker-stop docker-restart docker-logs docker-clean docker-run-dev \
+	docker-run-dev-tunnel docker-tunnel-logs docker-tunnel-stop
 
 docker-check: ## Verify Docker installation and configuration
 	@if ! command -v docker >/dev/null 2>&1; then \
@@ -11,48 +13,59 @@ docker-check: ## Verify Docker installation and configuration
 		echo "✅ Docker and Docker Compose are installed"; \
 	fi
 
+docker-check-build: ## Run Docker's build checks without building (Dockerfile sets check=error=true)
+	@echo "🔍 Running Docker build checks..."
+	docker build --check .
+
+docker-config: ## Validate the Compose file, with and without the tunnel profile
+	@echo "🔍 Validating Compose..."
+	$(COMPOSE) config -q
+	@echo "🔍 Validating Compose (tunnel profile)..."
+	$(COMPOSE) --profile $(TUNNEL_PROFILE) config -q
+	@echo "✅ Compose configuration is valid"
+
 docker-build: ## Create application containers
 	@echo "🔨 Building application containers..."
-	docker compose build
+	$(COMPOSE) build
 
 docker-rebuild: ## Rebuild containers with fresh configuration
 	@echo "🔨 Performing complete rebuild..."
-	docker compose down --volumes --remove-orphans
-	docker compose build --no-cache
-	docker compose up -d
+	$(COMPOSE) down --volumes --remove-orphans
+	$(COMPOSE) build --no-cache
+	$(COMPOSE) up -d
 
 docker-start: ## Launch application services
 	@echo "🚀 Starting application services..."
-	docker compose up -d
+	$(COMPOSE) up -d
 
 docker-stop: ## Stop all running services
 	@echo "🛑 Stopping application services..."
-	docker compose down
+	$(COMPOSE) down
 
 docker-restart: ## Restart all application services
 	@echo "🔄 Restarting services..."
-	docker compose down && docker compose up -d
+	$(COMPOSE) down && $(COMPOSE) up -d
 
 docker-logs: ## Display container logs
 	@echo "📜 Showing application logs..."
-	docker compose logs -f
+	$(COMPOSE) logs -f
 
 docker-clean: ## Remove all containers and volumes
 	@echo "🧹 Cleaning up resources..."
-	docker compose down --volumes --remove-orphans
+	$(COMPOSE) down --volumes --remove-orphans
 
 docker-run-dev: ## Start dev server with Compose watch (sync app/, rebuild on dep changes)
 	@echo "🚀 Starting development server..."
-	docker compose up --watch app
+	$(COMPOSE) up --watch $(APP_SERVICE)
 
 docker-run-dev-tunnel: ## Start dev server (watch) + Cloudflare Tunnel (opt-in profile)
 	@echo "🌐 Starting dev server + Cloudflare Tunnel..."
-	docker compose --profile tunnel up --watch app cloudflared
+	$(COMPOSE) --profile $(TUNNEL_PROFILE) up --watch $(APP_SERVICE) $(TUNNEL_SERVICE)
 
 docker-tunnel-logs: ## Follow Cloudflare Tunnel logs
 	@echo "📜 Following Cloudflare Tunnel logs..."
-	docker compose logs -f cloudflared
+	$(COMPOSE) --profile $(TUNNEL_PROFILE) logs -f $(TUNNEL_SERVICE)
 
 docker-tunnel-stop: ## Stop tunnel (does not remove app files)
 	@echo "🛑 Stopping Cloudflare Tunnel..."
-	docker compose stop cloudflared
+	$(COMPOSE) --profile $(TUNNEL_PROFILE) stop $(TUNNEL_SERVICE)

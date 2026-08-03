@@ -1,79 +1,76 @@
+# Local development stack. This is the only Compose file: production runs on Kubernetes, so nothing
+# here describes a deployment. The hardened `runtime` image is exercised by CI's smoke step
+# (.github/actions/smoke-test-image), and the production posture belongs in the k8s manifests.
 name: api-template
 
 services:
   app:
-    # API container for local development (Dockerfile target `reload`: hot reload,
-    # same dependency set as `runtime`).
-    # - Loads configuration from `.env` (do not commit secrets).
-    # - Live-reloads via Compose `develop.watch` below - no bind mount needed.
     build:
       context: .
       dockerfile: Dockerfile
       target: reload
     working_dir: /app
-    # Signal forwarding + zombie reaping for PID 1 (matters for the `fastapi dev`
-    # reloader subprocess).
     init: true
     ports:
-      # Bind to loopback only - prevents accidental exposure on all interfaces,
-      # which would bypass host firewall rules (e.g. UFW).
       - "127.0.0.1:8000:8000"
     env_file:
-      # Provide runtime secrets/config (independent from `.dockerignore`).
-      - .env
+      - path: .env
+        required: false
     environment:
+      ENVIRONMENT: development
+
+      # Blank the tunnel token inside the APP container. `.env` is read twice over - once by Compose
+      # for interpolation (which is how the `tunnel_token` secret below is sourced) and once by
+      # `env_file` above - so an operator who puts TUNNEL_TOKEN in `.env` would otherwise hand the
+      # tunnel's bearer credential to the process it fronts, visible in `docker inspect` and
+      # /proc/1/environ. `environment` outranks `env_file`, so this empty value wins. Only the
+      # cloudflared sidecar needs the token, and it gets it as a file. Do not remove this line.
+      TUNNEL_TOKEN: ""
+
       LOGFIRE_SEND_TO_LOGFIRE: "false"
       LOGFIRE_PYDANTIC_PLUGIN_RECORD: "off"
-    # Alternative (explicit) configuration - keep secrets out of version control:
-    # environment:
-    #   APP_NAME: "Backend"
-    #   API_KEY: "your_api_key_here"
-    #   API_CLIENT: "your_client_id_here"
 
-    # NOTE: `read_only: true` is intentionally NOT set on this dev service because
-    # `develop.watch` (action: sync) writes changed source into /app/app inside the
-    # container, which a read-only rootfs would block. The production `runtime`
-    # image needs no writable rootfs - enforce `read_only: true` in prod. /tmp is
-    # still capped and isolated via tmpfs below.
-    tmpfs:
-      - /tmp:size=64m,mode=1777
-
-    # Drop every capability; a plain uvicorn/FastAPI process needs none.
     cap_drop:
       - ALL
     security_opt:
-      # Block privilege escalation via setuid/setgid binaries.
       - no-new-privileges:true
-    # Limit process/thread count; mitigates fork-bomb style abuse.
-    pids_limit: 256
 
-    # Bound container resources so a runaway process can't starve the host.
-    # Enforced by Docker Compose v2 `up` (no Swarm required).
+    # Must equal deploy.resources.limits.pids below: Compose treats an ABSENT `pids` as 0, so
+    # `pids_limit` alongside any `limits` block is a hard `invalid compose project` error, not a
+    # warning. That validation is also what makes the duplication safe.
+    pids_limit: 256
     deploy:
       resources:
+        # `limits` only - `reservations` is silently ignored outside Swarm.
         limits:
           cpus: "2.0"
           memory: 1024M
+          pids: 256
 
-    # Prevent unbounded log growth from exhausting host disk.
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
 
-    # Compose waits for healthy before dependents start; port matches the dev server.
     healthcheck:
-      test: ["CMD", "python", "-c", "import sys,urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health',timeout=3); sys.exit(0 if r.status==200 else 1)"]
+      test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health',timeout=3).status==200 else 1)"]
       interval: 30s
       timeout: 5s
       start_period: 10s
+      # A Compose healthcheck REPLACES the image's HEALTHCHECK wholesale, flags included, so the
+      # Dockerfile's --start-interval does not carry over. Without this the container sits
+      # "starting" for up to 30s. Needs Engine >= 25.0.
+      start_interval: 5s
       retries: 3
 
-    # Hot reload without a bind mount (better DX on macOS/Windows):
-    #   sync    → copy edited source into the running container (fastapi dev reloads)
-    #   rebuild → a dependency/manifest change triggers an image rebuild
-    # Run with `docker compose up --watch` (see `make docker-run-dev`).
+    # `fastapi dev` has no in-flight-request budget to respect, so a short window keeps Ctrl-C
+    # snappy. The `runtime` stage is the opposite case: uvicorn gets --timeout-graceful-shutdown 25
+    # there, which must stay strictly inside whatever stop window its orchestrator applies.
+    stop_grace_period: 10s
+
+    # Hot reload without a bind mount (better DX on macOS/Windows). Requires `up --watch`
+    # (`make docker-run-dev`); a plain `up` does nothing.
     develop:
       watch:
         - action: sync
@@ -81,6 +78,7 @@ services:
           target: /app/app
           ignore:
             - __pycache__/
+            - "*.pyc"
         - action: rebuild
           path: pyproject.toml
         - action: rebuild
@@ -91,23 +89,42 @@ services:
       - internal
 
   cloudflared:
-    # Cloudflare Tunnel sidecar for sharing the development API externally.
-    # Opt-in via Compose profile `tunnel`.
+    # Public HTTPS without publishing an inbound host port. Opt-in: a bare `up` never starts it, and
+    # every command naming this service needs `--profile tunnel`, not just `up`.
+    #
+    # A tunnel started from this file is a DEMO LINK, never a deployment: ENVIRONMENT is development
+    # above, so `_enforce_production_hardening` is inert - /docs and the full OpenAPI schema are
+    # served, ALLOWED_ORIGINS and ALLOWED_HOSTS may still be `*`, and an empty API_KEY does not
+    # raise. Tear it down with `make docker-tunnel-stop`.
     profiles: ["tunnel"]
-    # Pin the version (never `:latest`) for reproducible tunnels.
     image: cloudflare/cloudflared:2026.7.2
     init: true
     restart: unless-stopped
-    # The tunnel token identifies the tunnel configuration created in Cloudflare;
-    # the URL tells the tunnel where to forward traffic.
-    command: tunnel --no-autoupdate run --url http://app:8000
+    # The image ENTRYPOINT is already ["cloudflared", "--no-autoupdate"]. --metrics must precede the
+    # `run` subcommand and is what makes the healthcheck below possible.
+    command: tunnel --metrics 127.0.0.1:2000 run --url http://app:8000
     dns:
       - 1.1.1.1
       - 8.8.8.8
+    secrets:
+      - tunnel_token
     environment:
-      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
-    # Hardening - cloudflared makes only outbound connections: it needs no Linux
-    # capabilities and no writable rootfs.
+      # File-based injection (cloudflared >= 2025.4.0) keeps the bearer token out of the container
+      # environment, out of `docker inspect`, and out of the host process list - all of which a
+      # plain `--token`/TUNNEL_TOKEN would expose.
+      TUNNEL_TOKEN_FILE: /run/secrets/tunnel_token
+    # `tunnel ready` exits 0 only once the connector has a live edge connection, so this is a real
+    # readiness probe. The image is distroless (no shell, no curl), so the binary's own subcommand is
+    # the only option.
+    healthcheck:
+      test: ["CMD", "cloudflared", "tunnel", "--metrics", "127.0.0.1:2000", "ready"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      start_interval: 5s
+      retries: 3
+    # cloudflared only dials out (Cloudflare edge on 7844): no capabilities, no writable rootfs. The
+    # image already runs as non-root 65532.
     read_only: true
     tmpfs:
       - /tmp:size=16m,mode=1777
@@ -121,6 +138,7 @@ services:
         limits:
           cpus: "0.50"
           memory: 128M
+          pids: 128
     logging:
       driver: json-file
       options:
@@ -131,6 +149,13 @@ services:
         condition: service_healthy
     networks:
       - internal
+
+secrets:
+  tunnel_token:
+    # Sourced from the host environment (or `.env`, which Compose reads for interpolation) and
+    # delivered as a tmpfs FILE at /run/secrets/tunnel_token - never as a container environment
+    # variable, and never baked into an image layer.
+    environment: TUNNEL_TOKEN
 
 networks:
   internal:

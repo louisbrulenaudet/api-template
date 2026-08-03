@@ -38,6 +38,8 @@ are explicit (not `*`) and `API_KEY` is set; docs/OpenAPI default to off.
 | `make ci` | Ruff format + ty. **No tests** - run `make test` separately |
 | `make lock` / `make update` | The only way `uv.lock` may change |
 | `make dev` / `make prod` | Dev server on 8000 / prod on 8001 |
+| `make docker-run-dev` | Dev stack with Compose watch (8000). Compose is dev-only; prod is k8s |
+| `make docker-check-build` / `make docker-config` | The Docker gates CI runs - build checks, Compose validation |
 
 ## Critical gotchas
 
@@ -48,6 +50,7 @@ are explicit (not `*`) and `API_KEY` is set; docs/OpenAPI default to off.
 - **Outbound HTTP** uses a shared lifespan-scoped `httpx2.AsyncClient` on `app.state.http_client`
   (`app/core/http_client.py`); inject via `Depends(get_http_client)`. Never create per-request clients.
 - **Logfire** send/plugin flags stay off via Makefile / Docker / CI unless explicitly enabled.
+- **Compose is local dev only** - one `compose.yaml`, `reload` target, port 8000. Production runs on Kubernetes, so nothing here is a deployment descriptor: the hardened `runtime` image is proven by CI's smoke step (`.github/actions/smoke-test-image`) and the production posture belongs in the k8s manifests. Do not add a second Compose file or an override to model production. See `ops/docker`.
 - **`# type: ignore` suppresses nothing** - ty only honours `# ty: ignore[rule-name]`, and a bare
   `# ty: ignore` is an error.
 - **Worktrees carry no `.env`.** `.worktreeinclude` deliberately omits it: a subagent worktree that made

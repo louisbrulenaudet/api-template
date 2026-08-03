@@ -1,10 +1,19 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1
+# check=error=true
+
+# An alias stage adds no layer and costs nothing; both children resolve the same base image.
+FROM python:3.14-slim AS base
+
+# uv ships as a standalone binary in its own image. Resolved through a named stage so the `COPY
+# --from` below refers to a stage rather than an image reference - and so Dependabot sees this ref
+# on a FROM line too.
+FROM ghcr.io/astral-sh/uv:0.11.29 AS uvbin
 
 # uv is only present here. The runtime stage copies the finished venv and never
 # sees uv, reducing the attack surface and image size.
-FROM python:3.14-slim AS builder
+FROM base AS builder
 
-COPY --from=ghcr.io/astral-sh/uv:0.11.29 /uv /bin/
+COPY --from=uvbin /uv /bin/
 
 # UV_COMPILE_BYTECODE: ship precompiled .pyc for faster cold start.
 # UV_LINK_MODE=copy: the cache mount is a different filesystem than the venv, so
@@ -26,7 +35,7 @@ COPY pyproject.toml uv.lock /app/
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
-FROM python:3.14-slim AS runtime
+FROM base AS runtime
 
 # PYTHONDONTWRITEBYTECODE: suppress runtime .pyc writes (uv pre-compiled at build).
 # PYTHONUNBUFFERED: flush stdout/stderr immediately (visible in `docker logs`).
@@ -76,14 +85,24 @@ LABEL org.opencontainers.image.title="backend" \
 
 EXPOSE 8001
 
-# --start-interval probes more frequently during the start period.
+# --start-interval probes more frequently during the start period (needs Engine >= 25.0).
+# Exec form (JSON array): no /bin/sh is spawned per probe, and it survives a shell-less base if
+# the runtime is ever swapped for distroless. `python` resolves via PATH to the venv interpreter,
+# so the probe needs nothing installed that the app does not already need. Deliberately hits only
+# /api/v1/health - a probe that reached a downstream dependency would report this container
+# unhealthy for someone else's outage.
 HEALTHCHECK --interval=60s --timeout=5s --start-period=10s --start-interval=5s --retries=3 \
-    CMD python -c "import sys,urllib.request; url='http://127.0.0.1:8001/api/v1/health'; r=urllib.request.urlopen(url,timeout=3); sys.exit(0 if r.status==200 else 1)"
+    CMD ["python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8001/api/v1/health',timeout=3).status==200 else 1)"]
 
 # --no-server-header drops the `server: uvicorn` banner, which only tells a scanner what to
 # target. Proxy-header trust comes from FORWARDED_ALLOW_IPS above rather than a flag, so it stays
 # overridable at run time without rebuilding.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001", "--no-server-header"]
+# --timeout-graceful-shutdown has NO default in uvicorn: without it the server waits on in-flight
+# requests indefinitely, whatever stop window the orchestrator applies expires, and SIGKILL truncates
+# them. 25s has to stay strictly inside that window - in production that is Kubernetes'
+# terminationGracePeriodSeconds (default 30s), and in CI it is `docker stop --timeout 30` in the smoke
+# test. Compose never runs this stage; it builds `reload` below.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001", "--no-server-header", "--timeout-graceful-shutdown", "25"]
 
 # Inherits the hardened runtime image; fastapi/uvicorn come from the venv,
 # so uv is not needed here either.
@@ -92,7 +111,7 @@ FROM runtime AS reload
 # The dev server listens on 8000; override the inherited 8001 healthcheck so the
 # reload image is also correct when run directly (Compose overrides it too).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --start-interval=5s --retries=3 \
-    CMD python -c "import sys,urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health',timeout=3); sys.exit(0 if r.status==200 else 1)"
+    CMD ["python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health',timeout=3).status==200 else 1)"]
 
 EXPOSE 8000
 

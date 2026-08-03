@@ -56,7 +56,7 @@ dev = [
 
 [tool.uv]
 package = false
-required-version = ">=0.11.28"
+required-version = ">=0.11.8"
 exclude-newer = "7 days"
 # httpx2 sits on the outbound critical path; allow current releases past the 7-day
 # freshness gate so security/perf fixes (e.g. 2.7.0) are lockable immediately.

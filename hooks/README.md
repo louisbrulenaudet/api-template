@@ -38,7 +38,7 @@ hooks/
 | Cursor | [`.cursor/hooks.json`](../.cursor/hooks.json) | Project root |
 | Claude Code | [`.claude/settings.json`](../.claude/settings.json) | Project root |
 
-Claude Code handlers use **exec form** — `"command": "sh"` plus `"args": ["${CLAUDE_PROJECT_DIR}/hooks/…"]`. Exec form skips the shell entirely, so arguments pass verbatim and the path placeholder needs no quoting.
+Claude Code handlers use **exec form** - `"command": "sh"` plus `"args": ["${CLAUDE_PROJECT_DIR}/hooks/…"]`. Exec form skips the shell entirely, so arguments pass verbatim and the path placeholder needs no quoting.
 
 Scripts read JSON on **stdin** and accept both Claude (`tool_input.*`) and Cursor (flat `command` / `file_path`) shapes. The shared git/security guards also emit Cursor permission JSON on stdout; Claude Code discards stdout whenever a hook exits 2, so the same reason is always written to **stderr**, which is the stream Claude actually reads.
 
@@ -58,11 +58,11 @@ Scripts read JSON on **stdin** and accept both Claude (`tool_input.*`) and Curso
 | `sessionStart` (Cursor) / `SessionStart` (Claude) | `logging/session-start.sh` | no | Appends to `logs/session-start.log` |
 | `InstructionsLoaded` (Claude, `async`) | `logging/instructions-loaded.sh` | no | Appends to `logs/instructions-loaded.log` |
 
-Exit code **2** is the only blocking code — exit 1 is treated as a non-blocking error and the action proceeds. On `PostToolUse` even exit 2 only feeds the message back; it cannot roll back an edit that already ran. Cursor security guards set `failClosed: true`, so scripts always print `{"permission":"allow"}` on the allow path to avoid an empty-stdout block.
+Exit code **2** is the only blocking code - exit 1 is treated as a non-blocking error and the action proceeds. On `PostToolUse` even exit 2 only feeds the message back; it cannot roll back an edit that already ran. Cursor security guards set `failClosed: true`, so scripts always print `{"permission":"allow"}` on the allow path to avoid an empty-stdout block.
 
 ## Enforcement is layered
 
-Hooks are the *second* line. Read/write protection for secret paths lives in `permissions.deny` in [`.claude/settings.json`](../.claude/settings.json), because deny rules are unconditionally authoritative — a hook returning `allow` can never loosen them, and they apply to Bash file commands (`cat`, `sed`, …) too. The hooks add what rules cannot express: parsed Bash arguments, a `*.template` allowlist, an actionable reason, and an audit trail.
+Hooks are the *second* line. Read/write protection for secret paths lives in `permissions.deny` in [`.claude/settings.json`](../.claude/settings.json), because deny rules are unconditionally authoritative - a hook returning `allow` can never loosen them, and they apply to Bash file commands (`cat`, `sed`, …) too. The hooks add what rules cannot express: parsed Bash arguments, a `*.template` allowlist, an actionable reason, and an audit trail.
 
 ## Audit log
 
@@ -75,18 +75,18 @@ Deliberately **outside** the repository: `git clean -x` cannot delete it, worktr
 Run these from a shell, **not** through the agent: the git guards inspect the raw command string, so a test harness that quotes their own trigger patterns gets blocked by them.
 
 ```bash
-# Protected paths — deny, then allow
+# Protected paths - deny, then allow
 printf '{"tool_input":{"file_path":"/x/.env"}}'          | sh hooks/security/guard-protected-path.sh; echo "exit=$?"
 printf '{"tool_input":{"file_path":"/x/.env.template"}}' | sh hooks/security/guard-protected-path.sh; echo "exit=$?"
 
-# Destructive git — deny, then allow
+# Destructive git - deny, then allow
 printf '{"tool_input":{"command":"git push --force"}}' | sh hooks/git/guard-destructive-git.sh; echo "exit=$?"
 printf '{"tool_input":{"command":"git status"}}'       | sh hooks/git/guard-destructive-git.sh; echo "exit=$?"
 
 # Stop guard must yield once it has already asked for a continuation
 printf '{"stop_hook_active":true}' | sh hooks/git/guard-worktree-clean.sh; echo "exit=$?"
 
-# Audit redaction — write somewhere disposable and inspect the line
+# Audit redaction - write somewhere disposable and inspect the line
 printf '{"tool_input":{"command":"deploy API_KEY=sk-real"}}' \
   | CLAUDE_AUDIT_DIR=/tmp/audit-test sh hooks/logging/audit-bash.sh
 cat /tmp/audit-test/*/*.jsonl

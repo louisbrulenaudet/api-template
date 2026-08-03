@@ -32,7 +32,7 @@ Work the checklist in `.cursor/skills/review-checklist/SKILL.md` in order. It is
 ## Output contract
 
 ```
-<file>:<line> — <rule file> — <violation>
+<file>:<line> - <rule file> - <violation>
 
 Rules: PASS  |  FAIL (N)
 ```

@@ -22,7 +22,7 @@ nothing rather than padding. Silence on an area is a valid result.
 
 ---
 
-## 1. Guardrails — `core/guardrails.md` (always-on, highest severity)
+## 1. Guardrails - `core/guardrails.md` (always-on, highest severity)
 
 - A suppression added to clear a failure: `# noqa`, `# ty: ignore[...]`, `Any`, a skipped or deleted test,
   a relaxed assertion, a disabled Ruff rule, a loosened CI step. A suppression needs a stated reason in a
@@ -34,18 +34,18 @@ nothing rather than padding. Silence on an area is a valid result.
 - A duplicated DTO or `ErrorCodes` member instead of an import.
 - Any new surface that creates, rotates, or deletes a long-lived credential on a caller's behalf.
 
-## 2. Layering — `backend/services.md`
+## 2. Layering - `backend/services.md`
 
 - Logic that belongs in `app/services/`: a branch beyond input validation, a write or side effect,
   orchestration of more than one dependency or I/O call, or logic worth testing without HTTP.
 - Business logic placed in `app/core/`. `core/` is cross-cutting infrastructure only (settings, the shared
   HTTP client).
-- A service touching `Request` / `Response` — services are transport-agnostic.
+- A service touching `Request` / `Response` - services are transport-agnostic.
 - A service raising `HTTPException` instead of a `CoreError` subclass.
 - An anemic pass-through service that only forwards its arguments.
 - A relative import, or importing a module rather than the specific callable.
 
-## 3. Routes and DTOs — `backend/fastapi-routes.md`, `contracts/pydantic-dtos.md`
+## 3. Routes and DTOs - `backend/fastapi-routes.md`, `contracts/pydantic-dtos.md`
 
 - A handler doing more than validate, resolve dependencies, and shape one value into a DTO.
 - An unvalidated boundary: a raw `dict`, a bare `str`, or an untyped body/query where a DTO belongs.
@@ -53,31 +53,31 @@ nothing rather than padding. Silence on an area is a valid result.
 - A per-request `httpx2.AsyncClient` instead of `Depends(get_http_client)`.
 - A DTO field whose type or optionality changed without the asserting test changing in the same diff.
 
-## 4. Errors — `backend/exceptions.md`
+## 4. Errors - `backend/exceptions.md`
 
 - A new failure mode raising something other than a `CoreError` subclass.
 - A new error without a corresponding `ErrorCodes` member, or a duplicated member.
 - A handler or DTO that could put internals into the client-facing envelope: stack traces, SQL, file
   paths, upstream response bodies. `details` must stay withheld on 5xx.
 
-## 5. Style and naming — `quality/python-style.md`
+## 5. Style and naming - `quality/python-style.md`
 
-Ruff owns format, line length, quotes, import grouping and PEP 8 naming — **do not report what Ruff
+Ruff owns format, line length, quotes, import grouping and PEP 8 naming - **do not report what Ruff
 already enforces.** Report only the rules a linter cannot see:
 
 - A dropped coroutine: an async call neither awaited nor returned to the caller.
-- A relative import (`from .x import y`) — `app.*` absolute only.
+- A relative import (`from .x import y`) - `app.*` absolute only.
 - Contract naming: `{Name}Response` / `{Name}Request` in `app/dtos/`; `{Name}Error` subclassing
   `CoreError` in `app/exceptions/`; enum members `UPPER_SNAKE_CASE` on a `PascalCase` class; settings
   fields matching the env var they read.
 - A new markdown, rule, or hook filename that is not `kebab-case`.
 
-## 6. Tests — `quality/testing.md`
+## 6. Tests - `quality/testing.md`
 
 - A DTO, enum, or route contract change with no test update **in the same diff**.
 - An app built without `create_app(settings)`, a mutated module-level `app`, or
   `importlib.reload(app.main)`.
-- Settings built with `Settings(...)` instead of `build_settings(**overrides)` — the constructor consults
+- Settings built with `Settings(...)` instead of `build_settings(**overrides)` - the constructor consults
   the environment and a local `.env`.
 - A test that mutates settings or env without `get_settings.cache_clear()`.
 - `addopts` gaining `-q`, coverage, or `--disable-warnings`; `filterwarnings = ["error"]` relaxed;
@@ -86,7 +86,7 @@ already enforces.** Report only the rules a linter cannot see:
   Coverage is 100 % statements **and** branches.
 - Order-dependent or non-deterministic tests.
 
-## 7. Config and settings — `backend/settings-config.md`
+## 7. Config and settings - `backend/settings-config.md`
 
 - A new setting that is not on the frozen `Settings` model, or a secret not typed `SecretStr`.
 - An alias added where case-insensitive env mapping already works (only `name` has one, `APP_NAME`).
@@ -94,9 +94,9 @@ already enforces.** Report only the rules a linter cannot see:
   still raise under `ENVIRONMENT=production`; docs/OpenAPI must default off.
 - `.env.template` not updated when a new required variable landed.
 
-## 8. Ops — `ops/docker.md`, `ops/ci.md`
+## 8. Ops - `ops/docker.md`, `ops/ci.md`
 
-- A new `COPY` path in the Dockerfile without a matching `!` entry in `.dockerignore` — the build context
+- A new `COPY` path in the Dockerfile without a matching `!` entry in `.dockerignore` - the build context
   is an allowlist.
 - Dev (8000) / container (8001) port or healthcheck parity broken.
 - A secret baked into an image layer or a build arg.
@@ -107,5 +107,5 @@ already enforces.** Report only the rules a linter cannot see:
 ## Out of scope for this checklist
 
 Semantic bug-hunting (logic errors, race conditions, edge cases) belongs to the bundled `/code-review`
-skill. End-to-end behaviour belongs to `/verify`. Do not duplicate either — a reviewer prompted to find
+skill. End-to-end behaviour belongs to `/verify`. Do not duplicate either - a reviewer prompted to find
 problems will invent them, and over-reporting trains the reader to ignore the report.

@@ -1,0 +1,81 @@
+name: Smoke test runtime image
+description: >-
+  Run the image under the hardening it is meant to tolerate - read-only rootfs, all capabilities
+  dropped, no new privileges - and assert it serves, runs unprivileged, hides /docs in production
+  and carries no uv. An image that builds but cannot serve a request is not a passing build.
+
+inputs:
+  image:
+    description: Image reference to run, e.g. api-template:runtime.
+    required: true
+  port:
+    description: Port the image serves. Must match the stage's own EXPOSE/CMD.
+    required: false
+    default: "8001"
+  expected-uid:
+    description: UID the container must run as.
+    required: false
+    default: "10001"
+  timeout-seconds:
+    description: How long to wait for the first healthy response.
+    required: false
+    default: "30"
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        PORT: ${{ inputs.port }}
+        EXPECTED_UID: ${{ inputs.expected-uid }}
+        TIMEOUT: ${{ inputs.timeout-seconds }}
+      run: |
+        # Every assertion below exits non-zero on failure, which would otherwise skip the final
+        # `docker stop` and leave the container holding the published port - on a reused or
+        # self-hosted runner the next run then fails on a name conflict, i.e. red for the wrong
+        # reason.
+        trap 'docker rm --force smoke >/dev/null 2>&1 || true' EXIT
+
+        docker run --rm --detach --name smoke \
+          --read-only --tmpfs /tmp:size=64m,mode=1777 \
+          --cap-drop ALL --security-opt no-new-privileges:true \
+          --env ENVIRONMENT=production \
+          --env API_KEY=ci-smoke-test-not-a-real-key \
+          --env ALLOWED_ORIGINS=https://example.com \
+          --env ALLOWED_HOSTS=example.com \
+          --publish "127.0.0.1:${PORT}:${PORT}" \
+          "${IMAGE}"
+
+        for i in $(seq 1 "${TIMEOUT}"); do
+          if curl -fsS "http://127.0.0.1:${PORT}/api/v1/health" >/dev/null 2>&1; then
+            echo "healthy after ${i}s"; break
+          fi
+          if [ "${i}" -eq "${TIMEOUT}" ]; then
+            echo "::error::image never became healthy"; docker logs smoke; exit 1
+          fi
+          sleep 1
+        done
+
+        echo "runtime uid/gid: $(docker exec smoke id -u):$(docker exec smoke id -g)"
+        test "$(docker exec smoke id -u)" = "${EXPECTED_UID}" || {
+          echo "::error::container is not running as UID ${EXPECTED_UID}"; exit 1; }
+
+        # Docs must be off in production (app/core/config.py derives this from ENVIRONMENT).
+        code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PORT}/docs")
+        test "${code}" = "404" || {
+          echo "::error::/docs returned ${code}, expected 404 in production"; exit 1; }
+
+        # uv must not have reached the runtime stage. Probed through `python`, not `sh -c
+        # 'command -v uv'`: a shell-less base (the docker rule contemplates swapping `runtime` for
+        # distroless) or an already-exited container makes `docker exec` fail, which an
+        # `if … 2>&1`-style check cannot tell apart from "uv absent" - the gate would pass an image
+        # that ships uv. So prove exec works first, then trust the negative.
+        docker exec smoke python -c 'pass' || {
+          echo "::error::cannot exec in the container; the uv assertion would fail open"; exit 1; }
+        if docker exec smoke python -c "import shutil,sys; sys.exit(0 if shutil.which('uv') else 1)"; then
+          echo "::error::uv is present in the runtime image"; exit 1
+        fi
+
+        docker logs smoke
+        docker stop --timeout 30 smoke

@@ -7,7 +7,7 @@
 [![Ruff](https://img.shields.io/static/v1?label=linting&message=Ruff&color=blueviolet&logo=ruff&logoColor=white)](https://github.com/astral-sh/ruff)
 [![GitHub Actions](https://img.shields.io/static/v1?label=ci/cd&message=GitHub%20Actions&color=blueviolet&logo=github-actions&logoColor=white)](https://github.com/features/actions)
 
-A minimal, production-ready FastAPI template with strict request/response validation (Pydantic v2 settings and DTOs), Docker and Compose for local development and production-oriented deploys, and an optional Cloudflare Tunnel for a public HTTPS URL without exposing an inbound port on your host.
+A minimal, production-ready FastAPI template with strict request/response validation (Pydantic v2 settings and DTOs), a hardened multi-stage Docker image, Compose for local development, and an optional Cloudflare Tunnel for a public HTTPS URL without exposing an inbound port on your host.
 
 Use the Makefile and **uv** for dependency management and day-to-day commands.
 
@@ -180,7 +180,11 @@ This project avoids the FastAPI Cloud CLI stack (`fastapi-cloud-cli` / `sentry-s
 
 4. **(Optional) Cloudflare Tunnel (development sharing)**
 
-   To share the API without opening port `8000` on your LAN (e.g. for testing): set `TUNNEL_TOKEN` in `.env` and run `make docker-run-dev-tunnel` (tunnel is opt-in via the Compose profile `tunnel`). In the Compose workflow, `cloudflared` prints the public tunnel URL in the terminal (or use `make docker-tunnel-logs`).
+   To share the API without opening port `8000` on your LAN (e.g. for testing): set `TUNNEL_TOKEN` in your shell or in `.env`, then run `make docker-run-dev-tunnel` (tunnel is opt-in via the Compose profile `tunnel`). `cloudflared` prints the public tunnel URL in the terminal (or use `make docker-tunnel-logs`).
+
+   `TUNNEL_TOKEN` is read by **Compose**, not by the app: it feeds the top-level `secrets:` element, which delivers the value to the `cloudflared` container as a file at `/run/secrets/tunnel_token`. Because `.env` is *also* loaded into the app container via `env_file:`, `compose.yaml` explicitly sets `TUNNEL_TOKEN: ""` on the `app` service so the tunnel's bearer credential never reaches the internet-facing process. Do not remove that line.
+
+   > **This is a demo link, not a deployment.** `compose.yaml` pins `ENVIRONMENT=development`, which leaves `/docs`, the full OpenAPI schema, and any wildcard `ALLOWED_ORIGINS` / `ALLOWED_HOSTS` in place, and lets an empty `API_KEY` boot. Tear the tunnel down when you are done (`make docker-tunnel-stop`). Compose here is local development only - for anything durable, deploy the `runtime` image with `ENVIRONMENT=production`, which fails closed unless `ALLOWED_ORIGINS`, `ALLOWED_HOSTS` and `API_KEY` are set explicitly.
 
 5. **Development:**
 
@@ -221,6 +225,8 @@ The following Makefile commands are available for development, formatting, testi
 | Command                | Description                                  |
 |------------------------|----------------------------------------------|
 | `make docker-check`    | Verify Docker installation and configuration |
+| `make docker-check-build` | Run Docker's build checks without building (CI gate) |
+| `make docker-config`   | Validate `compose.yaml`, with and without the tunnel profile (CI gate) |
 | `make docker-build`    | Create application containers                |
 | `make docker-rebuild`  | Rebuild containers with fresh configuration  |
 | `make docker-start`    | Launch application services                  |
@@ -255,7 +261,7 @@ The [`.dockerignore`](.dockerignore) uses an **allowlist** strategy: everything 
 
 ## Prerequisites
 
-- [Docker](https://docs.docker.com/get-docker/) and Docker Compose for containerization and deployment.
+- [Docker](https://docs.docker.com/get-docker/) and Docker Compose for containerization and local development.
 - [uv](https://github.com/astral-sh/uv) (Python dependency manager)
 - [ruff](https://docs.astral.sh/ruff/) (linter/formatter)
 

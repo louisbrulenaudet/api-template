@@ -1,6 +1,6 @@
 ---
-description: GitHub Actions CI - uv frozen sync, Ruff/pytest parity with make, no weakened gates
-globs: .github/workflows/**
+description: GitHub Actions CI - uv frozen sync, Ruff/pytest parity with make, sequential steps, composite actions for shell, no weakened gates
+globs: .github/workflows/**,.github/actions/**
 alwaysApply: false
 ---
 
@@ -12,12 +12,56 @@ list; a prose copy here would only drift out of date.
 ## What must stay true
 
 - **`make` targets and GHA steps run the same commands.** Divergence between them is how "green locally,
-  red in CI" happens. Change both in one edit.
+  red in CI" happens. Change both in one edit. `make ci` runs `ruff format`, so CI runs
+  `ruff format --check .` - without it formatting drift can never fail the gate.
+- **Steps run in order unless a `parallel:` block asks otherwise.** A `- parallel:` entry under `steps:`
+  takes a list of step objects and runs them concurrently - GA on 2026-06-25
+  ([changelog](https://github.blog/changelog/2026-06-25-actions-steps-can-now-be-run-in-parallel/)),
+  alongside `background: true`, `wait` / `wait-all` and `cancel`. `parallel:` is sugar for "make these
+  background steps, then wait". Used by the `test` job (four independent checks) and `docker-lint` (build
+  checks + Compose validation) - cheaper than one job per check, each repeating the setup steps.
+- **Only `run:` steps inside a `parallel:` block are a proven pattern.** Every published example uses
+  `run:`; whether a `uses:` step is permitted there is undocumented either way, which is why
+  `docker-build`'s two `uses:` steps stay sequential (they would also save ~1s, since `docker history` is
+  instant next to the smoke test). Separately and definitely: a composite action cannot *contain*
+  `parallel:` / `background:` - check that before moving a step into `.github/actions/`.
+- **Unverified specifics, so do not build on them:** the branch cap was stated as 10 pre-GA, failure
+  propagation at the implicit wait is not documented, and neither is support for `env:` / `if:` / `with:` /
+  `continue-on-error:` on these steps. As of 2026-08-03 the workflow-syntax reference page still omits the
+  keys entirely, so the changelog is the only citation - and a CI run is the only real confirmation.
+- **Multi-line shell belongs in a local composite action under `.github/actions/<name>/action.yml`**, not
+  inline in the workflow. Every `run` step inside one **must** declare `shell: bash` (there is no default),
+  it is referenced as `uses: ./.github/actions/<name>` and therefore requires `actions/checkout` first, and
+  a value reaching shell must go through `env:` and be read as `"${VAR}"` - `${{ inputs.x }}` written into a
+  `run:` body is raw string substitution.
 - **Installs use `--frozen`, never `--locked`** - see `quality/python-tooling` for why the relative
   `exclude-newer` window makes `--locked` drift. The uv version is pinned in the workflow; bump it
   deliberately.
 - **The Docker `runtime` build is an independent job** (deliberately no `needs: test`) with a Buildx GHA
   layer cache. Do not drop it without replacing the coverage it gives.
+- **`docker-lint` runs `make docker-check-build` + `make docker-config`, not raw `docker` commands** - that
+  is how the local and CI Docker gates stay identical. Add a check to `make/docker.mk`, never to the step.
+- **The smoke step is the gate, not the build.** An image that builds but cannot serve a request is not a
+  passing build: `.github/actions/smoke-test-image` runs it under `--read-only --cap-drop ALL
+  --security-opt no-new-privileges`, polls `/api/v1/health`, and asserts UID 10001, `/docs` → 404 in
+  production, and that `uv` is absent from `runtime`. Since Compose no longer describes production
+  (`ops/docker`), these assertions are the **only** proof in this repo that the hardening holds - the rest
+  moved to the k8s manifests.
+- **`github.ref_name` is attacker-influenceable** (anyone can name a branch, and a ref name may legally
+  contain shell metacharacters), so it must never be interpolated into a script body. The cheapest way to
+  honour that is not to use it: the image build arg is `${{ github.sha }}`, which needs no sanitising. If a
+  ref name ever *is* needed, read it via `env:` and quote it, and sanitise before it reaches a build arg or
+  an OCI label.
+- **There is deliberately no image CVE scanner and no SBOM step.** Trivy and the CycloneDX artifact were
+  removed as disproportionate for a template of this size. What still covers the ground: Dependabot's `uv`
+  ecosystem for Python dependencies, its `docker` ecosystem for base-image bumps, `trufflehog.yaml` for
+  secrets, and `assert-no-baked-credentials` for credentials in layers. The gap that remains is OS-level
+  CVEs in the base image between Dependabot bumps - a known, accepted trade-off, not an oversight to fill.
+- **`permissions:` is `contents: read` and nothing else.** No job writes, so that top-level block is the
+  entire permission surface. Third-party actions inherit whatever the job grants and a retagged release is
+  the realistic threat, so a job that genuinely needs to write gets its own narrower `permissions:` block -
+  never a new scope at the top. (`cache-to: type=gha` does **not** need `actions: write`; it authenticates
+  with the runner's own token.)
 - **Production secrets never live in workflow files.** Use GitHub Actions secrets / environments, and keep
   Logfire send flags off unless the run is explicitly testing telemetry.
 
