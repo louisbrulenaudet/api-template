@@ -21,6 +21,24 @@ Three orderings are load-bearing and must not be "tidied":
   what prevents an open redirect.
 - **SecurityHeaders outside both** - so their short-circuit 400/307 responses still carry the headers.
 
+## Probe exemption
+
+`ProbeBypassMiddleware` (`app/middlewares/probe_bypass.py`) owns TrustedHost + HTTPSRedirect as one unit
+and serves `PROBE_PATHS` (`app/api/v1/router.py`) without either. Neither guard is satisfiable by a probe:
+the Dockerfile `HEALTHCHECK` and a kubelet probe both connect by IP, so they send a `Host` production's
+explicit-hostname `ALLOWED_HOSTS` cannot name, and a 307 to HTTPS is one they cannot follow. Without it
+the container is permanently unhealthy - the failure mode that produced a wall of 400s in CI's image
+smoke test.
+
+**Both guards, not just the host check.** Exempting TrustedHost alone drops the request into
+HTTPSRedirect, which then builds `Location` from an unvalidated `Host` - an open redirect on
+`/api/v1/health`. That is why the two are composed inside one middleware instead of registered
+separately, and why `HTTPSRedirectMiddleware` no longer appears in `app.user_middleware` (assert on
+behaviour, not on that list).
+
+The exemption is safe only because these routes take no input and return a static payload. **Do not add a
+path to `PROBE_PATHS`** that reads request state, echoes anything, or builds a URL.
+
 `RequestIDMiddleware` and `SecurityHeadersMiddleware` are **pure ASGI, not `BaseHTTPMiddleware`** - the
 former deliberately so, because its `ContextVar` has to propagate downstream, which `BaseHTTPMiddleware`
 breaks.

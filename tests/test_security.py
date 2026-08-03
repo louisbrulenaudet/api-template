@@ -103,7 +103,8 @@ def test_hsts_present_with_force_https() -> None:
     with TestClient(app) as client:
         # `follow_redirects=False`: the redirect response itself must carry the header, which is
         # what proves SecurityHeadersMiddleware sits outside HTTPSRedirectMiddleware.
-        response = client.get("/api/v1/health", follow_redirects=False)
+        # A non-probe path, since probe paths are exempt from the redirect entirely.
+        response = client.get("/definitely-not-a-route", follow_redirects=False)
 
     assert response.status_code == 307
     assert "max-age=63072000" in response.headers["strict-transport-security"]
@@ -121,8 +122,11 @@ def test_disallowed_host_is_rejected() -> None:
     app = create_app(build_settings(allowed_hosts=["app.example"]))
 
     with TestClient(app, base_url="http://app.example") as client:
-        assert client.get("/api/v1/health").status_code == 200
-        assert client.get("/api/v1/health", headers={"Host": "evil.example"}).status_code == 400
+        assert client.get("/definitely-not-a-route").status_code == 404
+        assert (
+            client.get("/definitely-not-a-route", headers={"Host": "evil.example"}).status_code
+            == 400
+        )
 
 
 def test_host_validation_precedes_https_redirect() -> None:
@@ -131,10 +135,49 @@ def test_host_validation_precedes_https_redirect() -> None:
 
     with TestClient(app, base_url="http://app.example") as client:
         response = client.get(
-            "/api/v1/health",
+            "/definitely-not-a-route",
             headers={"Host": "evil.example"},
             follow_redirects=False,
         )
 
     assert response.status_code == 400
     assert "evil.example" not in response.headers.get("location", "")
+
+
+@pytest.mark.parametrize("path", ["/api/v1/health", "/api/v1/ping"])
+def test_probe_reaches_the_app_under_an_unnameable_host(path: str) -> None:
+    """A probe calling by IP must not be answered with `400 Invalid host header`.
+
+    The Dockerfile `HEALTHCHECK` requests `http://127.0.0.1:8001/api/v1/health` and a kubelet probe uses the pod IP, neither of which a production `ALLOWED_HOSTS` list can name - production rejects the `*` that would have allowed them. Without the exemption the container is permanently unhealthy, which is how this was found: CI's image smoke test logged nothing but 400s.
+    """
+    app = create_app(build_settings(allowed_hosts=["app.example"]))
+
+    with TestClient(app, base_url="http://app.example") as client:
+        assert client.get(path, headers={"Host": "127.0.0.1:8001"}).status_code == 200
+
+
+def test_probe_is_not_redirected_under_force_https() -> None:
+    """The exemption must cover the redirect too, not only host validation.
+
+    The probe speaks plain HTTP to a loopback port; a 307 to `https://…` is one it cannot follow, so exempting the host check alone would leave the healthcheck just as broken.
+    """
+    app = create_app(build_settings(force_https=True, allowed_hosts=["app.example"]))
+
+    with TestClient(app, base_url="http://app.example") as client:
+        response = client.get(
+            "/api/v1/health",
+            headers={"Host": "127.0.0.1:8001"},
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 200
+
+
+def test_probe_exemption_does_not_leak_to_other_paths() -> None:
+    """Only the probe paths are exempt; a spoofed Host must still be rejected elsewhere."""
+    app = create_app(build_settings(allowed_hosts=["app.example"]))
+
+    with TestClient(app, base_url="http://app.example") as client:
+        # A path that merely starts like a probe must not inherit the exemption.
+        assert client.get("/api/v1/health/sub", headers={"Host": "evil.example"}).status_code == 400
+        assert client.get("/api/v1/ping", headers={"Host": "evil.example"}).status_code == 200

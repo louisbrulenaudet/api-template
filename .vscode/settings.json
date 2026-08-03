@@ -177,6 +177,7 @@
     "jsonable",
     "jsonc",
     "keepalive",
+    "kubelet",
     "linehaul",
     "linux",
     "lockfiles",

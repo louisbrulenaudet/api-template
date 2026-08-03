@@ -1,5 +1,4 @@
 from fastapi import FastAPI
-from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings, get_settings
@@ -8,21 +7,31 @@ from app.main import create_app
 from tests.conftest import build_settings
 
 
-def test_force_https_registers_https_redirect_middleware() -> None:
-    """`FORCE_HTTPS` should add the HTTPS redirect middleware.
+def test_force_https_redirects_plain_http() -> None:
+    """`FORCE_HTTPS` must redirect a plain-HTTP request to the HTTPS origin.
 
-    Built through `create_app` with explicit settings. The previous version mutated the environment and called `importlib.reload(app.main)`, which rebound the module-level `app` other tests had already captured.
+    Built through `create_app` with explicit settings. An older version mutated the environment and called `importlib.reload(app.main)`, which rebound the module-level `app` other tests had already captured.
+
+    Asserted on behavior rather than on `app.user_middleware`: `HTTPSRedirectMiddleware` is composed inside `ProbeBypassMiddleware` and so never appears in that list, but an introspection test would have kept passing had the redirect stopped working.
     """
     app = create_app(build_settings(force_https=True))
 
-    assert any(m.cls is HTTPSRedirectMiddleware for m in app.user_middleware)
+    with TestClient(app) as client:
+        # Any non-probe path: the redirect fires before routing, so it need not exist.
+        response = client.get("/definitely-not-a-route", follow_redirects=False)
+
+    assert response.status_code == 307
+    assert response.headers["location"].startswith("https://")
 
 
 def test_https_redirect_absent_by_default() -> None:
-    """The redirect middleware must not be registered unless asked for."""
+    """A request must not be redirected unless `FORCE_HTTPS` asked for it."""
     app = create_app(build_settings())
 
-    assert not any(m.cls is HTTPSRedirectMiddleware for m in app.user_middleware)
+    with TestClient(app) as client:
+        response = client.get("/definitely-not-a-route", follow_redirects=False)
+
+    assert response.status_code == 404
 
 
 def test_factory_settings_reach_route_dependencies() -> None:

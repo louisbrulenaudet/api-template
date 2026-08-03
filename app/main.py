@@ -7,6 +7,7 @@ from aiocache.backends.memory import SimpleMemoryCache
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
 
+from app.api.v1.router import API_V1_PREFIX
 from app.api.v1.router import router as api_router
 from app.core.config import Settings, get_settings
 from app.core.http_client import create_http_client, set_http_client
@@ -100,7 +101,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     configure_middleware(app, settings)
     register_exception_handlers(app)
-    app.include_router(api_router, prefix="/api/v1")
+    app.include_router(api_router, prefix=API_V1_PREFIX)
 
     return app
 

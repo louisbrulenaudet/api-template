@@ -11,7 +11,9 @@ patterns.
 ## Template surface
 
 `GET /api/v1/ping` → `PingResponse` · `GET /api/v1/health` → `HealthResponse`. Both stay
-**unauthenticated** - Docker/K8s probes call them, so adding auth breaks container health checks.
+**unauthenticated** - Docker/K8s probes call them, so adding auth breaks container health checks. For the
+same reason they are listed in `PROBE_PATHS` and exempted from host validation and HTTPS redirection; see
+[middleware.md](middleware.md) before touching that list.
 
 Protect a router with `APIRouter(dependencies=[Depends(require_api_key)])`
 (`app/core/security.py`) - per-router, not per-handler.

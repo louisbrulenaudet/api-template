@@ -305,7 +305,11 @@ exclude_lines = [
     "if self.debug:",
     "raise NotImplementedError",
     "if __name__ == .__main__.:",
-    "pass",
+    # Anchored: these are unanchored regexes matched against the whole line, and a bare "pass"
+    # also matches any identifier containing it - `ProbeBypassMiddleware`, `password`,
+    # `passthrough` - which excludes that line AND the block it introduces. A whole class then
+    # vanishes from the 100% gate while still reporting 100%.
+    "^\\s*pass$",
     "raise ImportError",
 ]
 ignore_errors = true

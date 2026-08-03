@@ -44,7 +44,12 @@ list; a prose copy here would only drift out of date.
 - **The smoke step is the gate, not the build.** An image that builds but cannot serve a request is not a
   passing build: `.github/actions/smoke-test-image` runs it under `--read-only --cap-drop ALL
   --security-opt no-new-privileges`, polls `/api/v1/health`, and asserts UID 10001, `/docs` → 404 in
-  production, and that `uv` is absent from `runtime`. Since Compose no longer describes production
+  production, and that `uv` is absent from `runtime`. It also waits for Docker's own `HEALTHCHECK` to
+  report `healthy` and checks that a non-probe path still answers 400 to an unlisted `Host` - the pair
+  that pins the probe exemption (`backend/middleware`) open at one end and shut at the other. **Only
+  probe paths may be curled without `-H "Host: ${ALLOWED_HOST}"`**: production forbids a wildcard
+  `ALLOWED_HOSTS`, so anything else gets a 400 before routing, and adding the header to the health poll
+  would silently stop testing the exemption. Since Compose no longer describes production
   (`ops/docker`), these assertions are the **only** proof in this repo that the hardening holds - the rest
   moved to the k8s manifests.
 - **`github.ref_name` is attacker-influenceable** (anyone can name a branch, and a ref name may legally
