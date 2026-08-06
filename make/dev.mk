@@ -1,4 +1,4 @@
-.PHONY: dev prod test test-cov sync sync-all check format type-check ci ci-check update pre-commit clean-venv install lock export-requirements check-requirements rules-check
+.PHONY: dev prod test test-cov sync sync-all check format type-check ci ci-check update pre-commit clean-venv install lock export-requirements check-requirements
 
 # Convention: every routine command is `--frozen`; the lock changes only on explicit re-locking
 # (quality/uv-dependencies).
@@ -53,7 +53,7 @@ ci: format type-check ## Format + lint (Ruff) and type-check (ty); no tests
 
 # The non-mutating mirror of CI's `test` job, in the workflow's own order. Keep the command list
 # identical to the workflow's; the one intended difference is no `--output-format github` (ops/ci).
-ci-check: sync check-requirements rules-check ## Exactly what CI's `test` job runs; never mutates the tree
+ci-check: sync check-requirements ## Exactly what CI's `test` job runs; never mutates the tree
 	@echo "🔍 Checking formatting (Ruff)..."
 	uv run --no-sync ruff format --check .
 	@echo "🔍 Linting (Ruff)..."
