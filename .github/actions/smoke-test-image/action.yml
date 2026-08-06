@@ -1,6 +1,6 @@
 name: Smoke test runtime image
 description: >-
-  Run the image under the hardening it is meant to tolerate - read-only rootfs, all capabilities dropped, no new privileges - and assert it serves, satisfies its own HEALTHCHECK, still rejects an unlisted Host on non-probe paths, runs unprivileged, hides /docs in production, and ships neither uv, the fastapi CLI nor pip. An image that builds but cannot serve a request is not a passing build.
+  Run the image under the hardening it is meant to tolerate - read-only rootfs, all capabilities dropped, no new privileges - and assert it serves, satisfies its own HEALTHCHECK, still rejects an unlisted Host on non-probe paths, runs unprivileged, hides /docs in production, and ships neither uv, fastapi-cli nor pip. An image that builds but cannot serve a request is not a passing build.
 
 inputs:
   image:
@@ -96,10 +96,13 @@ runs:
           echo "::error::uv is present in the runtime image"; exit 1
         fi
 
-        # Finding the CLI here means it moved back into `[project] dependencies`
-        # (quality/uv-dependencies).
-        if docker exec smoke python -c "import shutil,sys; sys.exit(0 if shutil.which('fastapi') else 1)"; then
-          echo "::error::the fastapi CLI is present in the runtime image"; exit 1
+        # Probe the MODULE, never `shutil.which('fastapi')`: `fastapi` itself declares the `fastapi`
+        # console script (`fastapi.cli:main`), an inert stub that raises unless `fastapi_cli` is
+        # importable, so the script is on PATH in every image that ships FastAPI at all and probing
+        # it asserts nothing. `fastapi_cli` is what drags typer/rich/shellingham in, so finding it
+        # here means it moved back into `[project] dependencies` (quality/uv-dependencies).
+        if docker exec smoke python -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('fastapi_cli') else 1)"; then
+          echo "::error::fastapi-cli is present in the runtime image"; exit 1
         fi
 
         # Absolute path to the SYSTEM interpreter, not bare `python` (the venv never had pip). Module
