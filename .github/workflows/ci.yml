@@ -2,10 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
   pull_request:
-    branches: [main]
-  # Lets the registry-bound gate be re-run without an empty commit (ops/ci).
   workflow_dispatch:
 
 # Deny by default; every job re-grants exactly `contents: read` (ops/ci).

@@ -48,11 +48,12 @@ Asserts every `@sha256:` pin is a multi-arch index that covers `linux/amd64` **a
 
 ## `smoke-test-image`
 
-**The smoke step is the gate, not the build.** An image that builds but cannot serve a request is not a passing build. It runs the image under `--read-only --cap-drop ALL --security-opt no-new-privileges`, polls `/api/v1/health`, and asserts UID 10001, `/docs` → 404 in production, and that `uv`, the `fastapi` CLI and `pip` are all absent from `runtime`.
+**The smoke step is the gate, not the build.** An image that builds but cannot serve a request is not a passing build. It runs the image under `--read-only --cap-drop ALL --security-opt no-new-privileges`, polls `/api/v1/health`, and asserts UID 10001, `/docs` → 404 in production, and that `uv`, `fastapi-cli` and `pip` are all absent from `runtime`.
 
 Since Compose no longer describes production (`ops/compose`), **these assertions are the only proof in this repo that the runtime hardening holds** - the rest moved to the k8s manifests. Weakening one silently removes that proof.
 
 - **The three absence checks deliberately share one preamble** - a `docker exec smoke python -c 'pass'` that proves exec works at all - because a failing `docker exec` is otherwise indistinguishable from "the thing is absent", and every one of those gates would fail open.
+- **The `fastapi-cli` check probes the module, never `shutil.which('fastapi')`:** `fastapi` declares that console script itself (`fastapi.cli:main`), as an inert stub that raises unless `fastapi_cli` is importable - so the script sits on `PATH` in *every* image that ships FastAPI at all. A `which` probe therefore asserts nothing about the CLI and fails forever; `fastapi_cli` is the package that actually drags typer / rich / shellingham in (`quality/uv-dependencies`).
 - **The `pip` check addresses `/usr/local/bin/python3` by absolute path on purpose:** bare `python` is the venv, which never had pip, so probing it would assert nothing. This check is what stops the Dockerfile's version-hardcoded `rm -rf` paths from degrading into a silent no-op (`ops/dockerfile`).
 - It also **waits for Docker's own `HEALTHCHECK` to report `healthy`** - a separate assertion from the health poll on purpose, because an image whose own healthcheck disagrees with reality is unschedulable in production however well it answers curl.
 - It checks that a **non-probe path still answers 400 to an unlisted `Host`** - the pair that pins the probe exemption (`backend/middleware`) open at one end and shut at the other.
