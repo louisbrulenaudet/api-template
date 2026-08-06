@@ -1,74 +1,55 @@
 ---
-description: GitHub Actions CI - uv frozen sync, Ruff/pytest parity with make, sequential steps, composite actions for shell, no weakened gates
-globs: .github/workflows/**,.github/actions/**
+description: GitHub Actions workflows - make ci-check parity, parallel step blocks, uv frozen sync then --no-sync runs, SHA-pinned uses, deny-by-default permissions, pinned runners, secret scanning, no weakened gates
+globs: .github/workflows/**,.python-version,.github/CODEOWNERS
 alwaysApply: false
 ---
 
 # Continuous Integration
 
-The workflow is `.github/workflows/ci.yml`. Read it for the step
-list; a prose copy here would only drift out of date.
+The workflows are `.github/workflows/ci.yml` and `trufflehog.yml`. Read them for the step list; a prose copy here would only drift out of date. Composite-action authoring is in `ops/composite-actions`.
 
-## What must stay true
+Weakening a CI gate to force green is covered by `guardrails` and is never the answer here either.
 
-- **`make` targets and GHA steps run the same commands.** Divergence between them is how "green locally,
-  red in CI" happens. Change both in one edit. `make ci` runs `ruff format`, so CI runs
-  `ruff format --check .` - without it formatting drift can never fail the gate.
-- **Steps run in order unless a `parallel:` block asks otherwise.** A `- parallel:` entry under `steps:`
-  takes a list of step objects and runs them concurrently - GA on 2026-06-25
-  ([changelog](https://github.blog/changelog/2026-06-25-actions-steps-can-now-be-run-in-parallel/)),
-  alongside `background: true`, `wait` / `wait-all` and `cancel`. `parallel:` is sugar for "make these
-  background steps, then wait". Used by the `test` job (four independent checks) and `docker-lint` (build
-  checks + Compose validation) - cheaper than one job per check, each repeating the setup steps.
-- **Only `run:` steps inside a `parallel:` block are a proven pattern.** Every published example uses
-  `run:`; whether a `uses:` step is permitted there is undocumented either way, which is why
-  `docker-build`'s two `uses:` steps stay sequential (they would also save ~1s, since `docker history` is
-  instant next to the smoke test). Separately and definitely: a composite action cannot *contain*
-  `parallel:` / `background:` - check that before moving a step into `.github/actions/`.
-- **Unverified specifics, so do not build on them:** the branch cap was stated as 10 pre-GA, failure
-  propagation at the implicit wait is not documented, and neither is support for `env:` / `if:` / `with:` /
-  `continue-on-error:` on these steps. As of 2026-08-03 the workflow-syntax reference page still omits the
-  keys entirely, so the changelog is the only citation - and a CI run is the only real confirmation.
-- **Multi-line shell belongs in a local composite action under `.github/actions/<name>/action.yml`**, not
-  inline in the workflow. Every `run` step inside one **must** declare `shell: bash` (there is no default),
-  it is referenced as `uses: ./.github/actions/<name>` and therefore requires `actions/checkout` first, and
-  a value reaching shell must go through `env:` and be read as `"${VAR}"` - `${{ inputs.x }}` written into a
-  `run:` body is raw string substitution.
-- **Installs use `--frozen`, never `--locked`** - see `quality/python-tooling` for why the relative
-  `exclude-newer` window makes `--locked` drift. The uv version is pinned in the workflow; bump it
-  deliberately.
-- **The Docker `runtime` build is an independent job** (deliberately no `needs: test`) with a Buildx GHA
-  layer cache. Do not drop it without replacing the coverage it gives.
-- **`docker-lint` runs `make docker-check-build` + `make docker-config`, not raw `docker` commands** - that
-  is how the local and CI Docker gates stay identical. Add a check to `make/docker.mk`, never to the step.
-- **The smoke step is the gate, not the build.** An image that builds but cannot serve a request is not a
-  passing build: `.github/actions/smoke-test-image` runs it under `--read-only --cap-drop ALL
-  --security-opt no-new-privileges`, polls `/api/v1/health`, and asserts UID 10001, `/docs` → 404 in
-  production, and that `uv` is absent from `runtime`. It also waits for Docker's own `HEALTHCHECK` to
-  report `healthy` and checks that a non-probe path still answers 400 to an unlisted `Host` - the pair
-  that pins the probe exemption (`backend/middleware`) open at one end and shut at the other. **Only
-  probe paths may be curled without `-H "Host: ${ALLOWED_HOST}"`**: production forbids a wildcard
-  `ALLOWED_HOSTS`, so anything else gets a 400 before routing, and adding the header to the health poll
-  would silently stop testing the exemption. Since Compose no longer describes production
-  (`ops/docker`), these assertions are the **only** proof in this repo that the hardening holds - the rest
-  moved to the k8s manifests.
-- **`github.ref_name` is attacker-influenceable** (anyone can name a branch, and a ref name may legally
-  contain shell metacharacters), so it must never be interpolated into a script body. The cheapest way to
-  honour that is not to use it: the image build arg is `${{ github.sha }}`, which needs no sanitising. If a
-  ref name ever *is* needed, read it via `env:` and quote it, and sanitise before it reaches a build arg or
-  an OCI label.
-- **There is deliberately no image CVE scanner and no SBOM step.** Trivy and the CycloneDX artifact were
-  removed as disproportionate for a template of this size. What still covers the ground: Dependabot's `uv`
-  ecosystem for Python dependencies, its `docker` ecosystem for base-image bumps, `trufflehog.yaml` for
-  secrets, and `assert-no-baked-credentials` for credentials in layers. The gap that remains is OS-level
-  CVEs in the base image between Dependabot bumps - a known, accepted trade-off, not an oversight to fill.
-- **`permissions:` is `contents: read` and nothing else.** No job writes, so that top-level block is the
-  entire permission surface. Third-party actions inherit whatever the job grants and a retagged release is
-  the realistic threat, so a job that genuinely needs to write gets its own narrower `permissions:` block -
-  never a new scope at the top. (`cache-to: type=gha` does **not** need `actions: write`; it authenticates
-  with the runner's own token.)
-- **Production secrets never live in workflow files.** Use GitHub Actions secrets / environments, and keep
-  Logfire send flags off unless the run is explicitly testing telemetry.
+## Parity with `make`
 
-Weakening a CI gate to force green is covered by `core/guardrails` and is never the
-answer here either.
+**`make` targets and GHA steps run the same commands.** Divergence between them is how "green locally, red in CI" happens. Change both in one edit. The mirror of the `test` job is **`make ci-check`**, which never mutates the tree; `make ci` is deliberately *not* that mirror, because it runs `ruff format .` and `ruff check . --fix`, so formatting drift can never fail it the way CI's `ruff format --check .` fails. Keep `ci-check`'s command list identical to the workflow's; it has exactly one intended difference, no `--output-format github` on ty, which changes rendering into PR annotations and never the verdict. See `ops/makefile`.
+
+`docker-lint`'s two `run:` steps are `make docker-check-build` + `make docker-config`, not raw `docker` commands - that is how the local and CI Docker gates stay identical. A check a developer should be able to reproduce locally goes in `make/docker.mk`, never inline in the step. The exception is a **registry-bound** gate, which belongs in a composite action instead (`ops/composite-actions`).
+
+## Parallel steps
+
+- **Steps run in order unless a `parallel:` block asks otherwise.** A `- parallel:` entry under `steps:` takes a list of step objects and runs them concurrently - GA on 2026-06-25 ([changelog](https://github.blog/changelog/2026-06-25-actions-steps-can-now-be-run-in-parallel/)), alongside `background: true`, `wait` / `wait-all` and `cancel`. `parallel:` is sugar for "make these background steps, then wait". Used by the `test` job (four independent checks) and `docker-lint` (build checks + Compose validation) - cheaper than one job per check, each repeating the setup steps.
+- **Only `run:` steps inside a `parallel:` block are a proven pattern.** Every published example uses `run:` and shows `uses:` only *outside* the block; whether a `uses:` step is permitted inside is still undocumented, which is why `docker-build`'s two `uses:` steps stay sequential (they would also save ~1s, since `docker history` is instant next to the smoke test).
+- **Verified in the workflow-syntax reference, so these you can build on:** the cap is **10** concurrent background steps and every step in a `parallel:` group counts against it. Failure **does** propagate at the implicit wait, which "will fail if any background step fails, unless `continue-on-error` is set to true". A `wait-all` step takes no arguments and **does not support `if:`**.
+- **`parallel:` cannot be used inside a composite action.** Check that before moving a step into `.github/actions/` - restated in `ops/composite-actions` because it constrains authoring on both sides.
+- **A workflow `run:` step does *not* get `-eo pipefail`, but a composite action's `shell: bash` does.** So a pipeline that is safe inline becomes a fail-open gate once moved into an action, and vice versa. The full trap and both mitigations are in `ops/composite-actions`; check it before relocating any shell.
+
+## uv and Python
+
+- **Installs use `--frozen`, never `--locked`** - see `quality/uv-dependencies` for why the relative `exclude-newer` window makes `--locked` drift. CI then *runs* with **`uv run --no-sync`** ("avoid syncing the virtual environment", which implies `--frozen`): `uv sync --frozen` already built the venv, so re-verifying it once per step buys nothing, and `--no-sync` is what guarantees four concurrent steps cannot mutate it behind uv's lock.
+- **Two `setup-uv` inputs are decisions, not defaults.** It is a literal `version:` and deliberately **not** `version-file: pyproject.toml`, because `[tool.uv] required-version` is a `>=` range, so resolving it would install whatever is newest and silently undo the pin. And `prune-cache: true` is set explicitly because v9 flipped that default to `false` - keeping it on is what uv's own CI guidance (`uv cache prune --ci`) exists for. **Nothing enforces this:** the uv version has three homes and nothing checks that they agree (`quality/uv-dependencies`).
+- **Python's version comes from `python-version-file: .python-version`, never a literal in the workflow.** "3.14" already lives in `requires-python`, Ruff's `target-version` and the Dockerfile base tag; a fourth copy in a `python-version:` input is one more thing to drift.
+- **`make check-requirements` is a gate, not a nicety.** `uv.lock` is not a manifest GitHub's dependency graph understands and `requirements.txt` is, so that export is the file Dependabot security alerts for the Python dependencies are computed from - stale means alerts raised against versions we do not ship, and none raised against the versions we do. It lives in `make/dev.mk` because a developer has to be able to reproduce it. **Its position in the job is also deliberate** - sequential, *before* the `parallel:` block, because `uv export` would otherwise contend with four concurrent `uv run`s for uv's lock, and the gate costs about a second.
+
+## Docker jobs
+
+- **The `runtime` build is an independent job** (deliberately no `needs: test`) with a Buildx GHA layer cache. Do not drop it without replacing the coverage it gives.
+- **The same job also builds the `reload` target, and building it *is* the test.** Nothing runs that image in CI - Compose is dev-only - so there is no `load:`; the point is that `reload` overlays a separate dev-group venv from `builder-dev` (`ops/dockerfile`), and a break in either would otherwise surface only on a contributor's laptop. It writes to **`scope=reload`**: two `cache-to: type=gha` entries in one job with the default scope clobber each other, so a second build target needs its own scope and should read from both. It exports **`mode=min`** where the runtime build uses `mode=max`: two `mode=max` exporters in one job compete for the repository's shared Actions cache quota, and the resulting eviction thrash degrades *both* silently. Nothing builds on top of `reload`, so its intermediate layers are never a cache base and `min` costs nothing.
+- **Both builds must pass the same `APP_VERSION`**, which is why it is a job-level `env:` rather than written twice: `reload` derives from `runtime`, so a differing build arg diverges the two at that `ARG` instruction and misses the shared `type=gha` cache from there on - defeating half the point of reading both scopes.
+- **`workflow_dispatch` is on the workflow for one specific reason:** `verify-base-digests` is the only registry-bound gate, so it is the only step that can go red on an unrelated upstream outage. Manual dispatch is what lets it be re-run without an empty commit. Do not remove it as unused.
+
+## Supply chain and least privilege
+
+- **Every `uses:` is pinned to a full-length commit SHA, with the tag in a trailing `# vX.Y.Z` comment.** A tag can be force-moved by its owner - even an exact one like `v7.0.1`, and a floating `@v7` moves by design - and GitHub's hardening reference is explicit that pinning to a full-length commit SHA "is currently the only way to use an action as an immutable release". Resolve a pin with `git ls-remote https://github.com/<owner>/<repo>.git refs/tags/<tag>`, never by hand, and keep the comment truthful: it is what Dependabot rewrites and what a reviewer actually reads. **Known trade-off, so do not "fix" this back to tags:** the dependency graph raises *advisory* alerts only for semver-pinned actions, so this buys immutability at the cost of those alerts. Dependabot version updates still work on SHA pins.
+- **Every `actions/checkout` sets `persist-credentials: false`.** The default is still `true` in v7 - v6 only moved the credential out of `.git/config` into `$RUNNER_TEMP`, it did not stop persisting it. Nothing in this repo pushes, so the token has no reason to outlive the clone; a job that ever does need to push re-enables it on that job alone.
+- **`permissions:` is `{}` at workflow level, with `contents: read` re-granted per job.** Deny by default. No job writes, so none needs more, and a job that genuinely does gets its own narrower `permissions:` block - never a new scope at the top. Third-party actions inherit whatever the job grants and a retagged release is the realistic threat. (`cache-to: type=gha` does **not** need `actions: write`; it authenticates with the runner's own token.)
+- **`github.ref_name` is attacker-influenceable** (anyone can name a branch, and a ref name may legally contain shell metacharacters), so it must never be interpolated into a script body. The cheapest way to honour that is not to use it: the image build arg is `${{ github.sha }}`, which needs no sanitizing. If a ref name ever *is* needed, read it via `env:` and quote it, and sanitize before it reaches a build arg or an OCI label.
+- **Runners are pinned to `ubuntu-24.04`, not `ubuntu-latest`.** `ubuntu-26.04` is already in public preview, so `latest` will migrate underneath us, and the Docker jobs' behaviour depends on the runner's Docker / Buildx versions. Dependabot does not manage runner labels, so this is a deliberate manual bump.
+- **`cancel-in-progress` is scoped to pull requests** (`${{ github.event_name == 'pull_request' }}`). Cancelling a push to `main` throws away the record of whether `main` was ever green at that SHA and can kill the very run a release would cite. Same in `trufflehog.yml`, where cancelling additionally risks leaving a commit range scanned by nothing.
+- **Production secrets never live in workflow files.** Use GitHub Actions secrets / environments, and keep Logfire send flags off unless the run is explicitly testing telemetry.
+
+## Secret scanning, and what is deliberately absent
+
+**`trufflehog.yml` runs on `push` to every branch, on `pull_request`, and weekly over full history.** The `pull_request` trigger is not redundant with the push one: a fork PR never pushes to this repository, so without it an incoming change was never scanned here before merge. The weekly sweep exists because TruffleHog's detectors and verifiers keep improving, so a credential already in history can become findable with no new commit to trigger a scan.
+
+**There is deliberately no image CVE scanner and no SBOM step.** Trivy and the CycloneDX artifact were removed as disproportionate for a template of this size. What still covers the ground: Dependabot's `uv` ecosystem for Python dependencies, its `docker` ecosystem for base-image bumps (`ops/dependabot`), `trufflehog.yml` for secrets, and `assert-no-baked-credentials` for credentials in layers. The gap that remains is OS-level CVEs in the base image between Dependabot bumps - a known, accepted trade-off rather than an oversight to fill, and disclosed as such in `SECURITY.md`.

@@ -1,6 +1,4 @@
-# Local development stack. This is the only Compose file: production runs on Kubernetes, so nothing
-# here describes a deployment. The hardened `runtime` image is exercised by CI's smoke step
-# (.github/actions/smoke-test-image), and the production posture belongs in the k8s manifests.
+# Local development stack only - production runs on Kubernetes (ops/compose).
 name: api-template
 
 services:
@@ -19,12 +17,7 @@ services:
     environment:
       ENVIRONMENT: development
 
-      # Blank the tunnel token inside the APP container. `.env` is read twice over - once by Compose
-      # for interpolation (which is how the `tunnel_token` secret below is sourced) and once by
-      # `env_file` above - so an operator who puts TUNNEL_TOKEN in `.env` would otherwise hand the
-      # tunnel's bearer credential to the process it fronts, visible in `docker inspect` and
-      # /proc/1/environ. `environment` outranks `env_file`, so this empty value wins. Only the
-      # cloudflared sidecar needs the token, and it gets it as a file. Do not remove this line.
+      # Scrubs a TUNNEL_TOKEN in `.env` from the internet-facing process - only the sidecar needs it, and it gets it as a file. Deleting this line is a silent credential leak (ops/compose).
       TUNNEL_TOKEN: ""
 
       LOGFIRE_SEND_TO_LOGFIRE: "false"
@@ -35,13 +28,10 @@ services:
     security_opt:
       - no-new-privileges:true
 
-    # Must equal deploy.resources.limits.pids below: Compose treats an ABSENT `pids` as 0, so
-    # `pids_limit` alongside any `limits` block is a hard `invalid compose project` error, not a
-    # warning. That validation is also what makes the duplication safe.
+    # Must equal deploy.resources.limits.pids below, or Compose hard-fails (ops/compose).
     pids_limit: 256
     deploy:
       resources:
-        # `limits` only - `reservations` is silently ignored outside Swarm.
         limits:
           cpus: "2.0"
           memory: 1024M
@@ -53,32 +43,20 @@ services:
         max-size: "10m"
         max-file: "3"
 
-    healthcheck:
-      test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health',timeout=3).status==200 else 1)"]
-      interval: 30s
-      timeout: 5s
-      start_period: 10s
-      # A Compose healthcheck REPLACES the image's HEALTHCHECK wholesale, flags included, so the
-      # Dockerfile's --start-interval does not carry over. Without this the container sits
-      # "starting" for up to 30s. Needs Engine >= 25.0.
-      start_interval: 5s
-      retries: 3
-
-    # `fastapi dev` has no in-flight-request budget to respect, so a short window keeps Ctrl-C
-    # snappy. The `runtime` stage is the opposite case: uvicorn gets --timeout-graceful-shutdown 25
-    # there, which must stay strictly inside whatever stop window its orchestrator applies.
+    # No `healthcheck:` here on purpose - the `reload` stage's own HEALTHCHECK is already exactly this check on this port, and a Compose one would replace it wholesale, flags included (ops/compose).
     stop_grace_period: 10s
 
-    # Hot reload without a bind mount (better DX on macOS/Windows). Requires `up --watch`
-    # (`make docker-run-dev`); a plain `up` does nothing.
+    # Hot reload without a bind mount. Requires `up --watch` (`make docker-run-dev`); a plain `up`
+    # does nothing.
     develop:
       watch:
         - action: sync
           path: ./app
           target: /app/app
+          # The `**/` prefixes are load-bearing; without them these match almost nothing (ops/compose).
           ignore:
-            - __pycache__/
-            - "*.pyc"
+            - "**/__pycache__/"
+            - "**/*.pyc"
         - action: rebuild
           path: pyproject.toml
         - action: rebuild
@@ -89,19 +67,12 @@ services:
       - internal
 
   cloudflared:
-    # Public HTTPS without publishing an inbound host port. Opt-in: a bare `up` never starts it, and
-    # every command naming this service needs `--profile tunnel`, not just `up`.
-    #
-    # A tunnel started from this file is a DEMO LINK, never a deployment: ENVIRONMENT is development
-    # above, so `_enforce_production_hardening` is inert - /docs and the full OpenAPI schema are
-    # served, ALLOWED_ORIGINS and ALLOWED_HOSTS may still be `*`, and an empty API_KEY does not
-    # raise. Tear it down with `make docker-tunnel-stop`.
+    # Public HTTPS without an inbound host port. A tunnel from this file is a DEMO LINK, never a
+    # deployment, and every command naming this service needs `--profile tunnel` (ops/compose).
     profiles: ["tunnel"]
-    image: cloudflare/cloudflared:2026.7.2
+    image: cloudflare/cloudflared:2026.7.2@sha256:4f6655284ab3d252b7f28fedb19fe6c8fc82ee5b1295c20ac74d475e5398a52d
     init: true
     restart: unless-stopped
-    # The image ENTRYPOINT is already ["cloudflared", "--no-autoupdate"]. --metrics must precede the
-    # `run` subcommand and is what makes the healthcheck below possible.
     command: tunnel --metrics 127.0.0.1:2000 run --url http://app:8000
     dns:
       - 1.1.1.1
@@ -109,13 +80,8 @@ services:
     secrets:
       - tunnel_token
     environment:
-      # File-based injection (cloudflared >= 2025.4.0) keeps the bearer token out of the container
-      # environment, out of `docker inspect`, and out of the host process list - all of which a
-      # plain `--token`/TUNNEL_TOKEN would expose.
+      # File-based injection (cloudflared >= 2025.4.0) keeps the token out of the container env.
       TUNNEL_TOKEN_FILE: /run/secrets/tunnel_token
-    # `tunnel ready` exits 0 only once the connector has a live edge connection, so this is a real
-    # readiness probe. The image is distroless (no shell, no curl), so the binary's own subcommand is
-    # the only option.
     healthcheck:
       test: ["CMD", "cloudflared", "tunnel", "--metrics", "127.0.0.1:2000", "ready"]
       interval: 30s
@@ -123,8 +89,7 @@ services:
       start_period: 10s
       start_interval: 5s
       retries: 3
-    # cloudflared only dials out (Cloudflare edge on 7844): no capabilities, no writable rootfs. The
-    # image already runs as non-root 65532.
+    # cloudflared only dials out, so it takes a read-only rootfs; the image runs as non-root 65532.
     read_only: true
     tmpfs:
       - /tmp:size=16m,mode=1777
@@ -152,9 +117,6 @@ services:
 
 secrets:
   tunnel_token:
-    # Sourced from the host environment (or `.env`, which Compose reads for interpolation) and
-    # delivered as a tmpfs FILE at /run/secrets/tunnel_token - never as a container environment
-    # variable, and never baked into an image layer.
     environment: TUNNEL_TOKEN
 
 networks:

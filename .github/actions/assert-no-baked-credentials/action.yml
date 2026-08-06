@@ -15,15 +15,8 @@ runs:
       env:
         IMAGE: ${{ inputs.image }}
       run: |
-        # Deliberately not `docker history | grep -q`. A composite action's `shell: bash` runs with
-        # `-eo pipefail` (a workflow `run:` step does not), and `grep -q` exits on first match, so
-        # `docker history` can take SIGPIPE and set the pipeline status to 141 - which would read as
-        # "no match" and let a real leak through. No pipe, no race; and this way a failing
-        # `docker history` fails the step instead of being mistaken for a clean result.
-        # `token` and `private[_-]?key` are matched on their own, not only as `tunnel_token` /
-        # `api_key`: CF_API_TOKEN, HF_TOKEN, GITHUB_TOKEN and PRIVATE_KEY are the shapes most likely
-        # to be added later, and the trailing `[=:][^ ]` keeps this off innocent substrings
-        # (`tokenizers==0.1` has no `token=`).
+        # No pipe into `grep -q`, and the pattern is broader than this repo's own names - both are
+        # load-bearing under a composite action's `-eo pipefail` (ops/ci).
         pattern='(api[_-]?key|token|secret|password|passwd|credential|private[_-]?key)[=:][^ ]'
         image_history=$(docker history --no-trunc --format '{{.CreatedBy}}' "${IMAGE}")
         if grep -Eiq "${pattern}" <<< "${image_history}"; then

@@ -276,7 +276,7 @@
   },
   "preferredNotifChannel": "terminal_bell",
   "spinnerTipsEnabled": false,
-  "effortLevel": "high",
+  "effortLevel": "xhigh",
   "alwaysThinkingEnabled": true,
   "autoMemoryEnabled": true,
   "cleanupPeriodDays": 20,

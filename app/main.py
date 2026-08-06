@@ -25,16 +25,7 @@ _DEFAULT_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
 
 
 def _generate_operation_id(route: APIRoute) -> str:
-    """Build a stable, path-free `operationId` for a route.
-
-    FastAPI's default embeds the URL (`ping_api_v1_ping_get`), so every generated client symbol changes when a path changes and leaks the route layout into client code. Deriving it from tag + handler name + method keeps generated SDKs stable across path edits.
-
-    Args:
-        route: The route being added to the schema.
-
-    Returns:
-        str: A deterministic operation identifier.
-    """
+    """Build a stable, path-free `operationId` for a route."""
     parts = [str(route.tags[0])] if route.tags else []
     parts.append(route.name)
     # `pragma: no branch`: an `APIRoute` always carries at least one method, so the false path is
@@ -50,9 +41,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """Configure application lifespan (cache + shared HTTP client)."""
     caches.set_config({"default": {"cache": SimpleMemoryCache, "ttl": 60}})
 
-    # Hold the client in a local: `app.state` reads are untyped (`Any`), so going
-    # back through it for `aclose()` would leave the teardown unchecked - and would
-    # close whatever is on state at shutdown rather than the client created here.
+    # Held in a local, never re-read from `app.state`, for teardown.
     http_client = create_http_client()
     set_http_client(app, http_client)
     try:
@@ -64,14 +53,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 def create_app(settings: Settings | None = None) -> FastAPI:
     """Build and configure a FastAPI application instance.
 
-    A factory (rather than a module-level app assembled at import time) keeps construction side-effect free until called and lets tests build a fresh, isolated app. The module-level ``app = create_app()`` below remains the ASGI entrypoint served as ``app.main:app``.
-
-    Args:
-        settings: Optional settings override; falls back to the cached ``get_settings()``.
-
-    Returns:
-        FastAPI: The configured application, with middleware, exception handlers, and the
-            versioned API router wired in.
+    The module-level ``app = create_app()`` below is the ASGI entrypoint served as ``app.main:app``.
     """
     settings = settings if settings is not None else get_settings()
 
@@ -93,10 +75,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         responses=_DEFAULT_ERROR_RESPONSES,
     )
 
-    # Bind the resolved settings to the dependency, so a handler's `Depends(get_settings)`
-    # returns the very object this app was built from. Without it the factory is split-brain:
-    # `create_app(custom)` titled the app from `custom` while every handler silently kept
-    # reading the process-wide `lru_cache`d settings.
+    # Required, not a test affordance: without it the factory is split-brain (backend/middleware).
     app.dependency_overrides[get_settings] = lambda: settings
 
     configure_middleware(app, settings)

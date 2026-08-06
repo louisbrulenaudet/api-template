@@ -5,9 +5,11 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Lets the registry-bound gate be re-run without an empty commit (ops/ci).
+  workflow_dispatch:
 
-permissions:
-  contents: read
+# Deny by default; every job re-grants exactly `contents: read` (ops/ci).
+permissions: {}
 
 env:
   LOGFIRE_SEND_TO_LOGFIRE: "false"
@@ -15,56 +17,76 @@ env:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Pull requests only - never a push to `main` (ops/ci).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
     name: Lint and tests
-    runs-on: ubuntu-latest
+    # Pinned, not `ubuntu-latest`; Dependabot does not manage runner labels (ops/ci).
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
+    permissions:
+      contents: read
 
     steps:
+      # Every `uses:` is pinned to a full-length commit SHA with the tag in a trailing comment, and
+      # every checkout sets `persist-credentials: false`. Both are load-bearing (ops/ci).
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.14"
+          python-version-file: .python-version
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v8.3.2
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
-          version: "0.11.29"
+          # One of this pin's three homes; bump all three together. Not `version-file:` (ops/ci).
+          version: "0.12.0"
           enable-cache: true
+          prune-cache: true
 
       - name: Install dependencies
         run: uv sync --frozen
 
+      # Sequential and before the `parallel:` block on purpose (ops/ci).
+      - name: Check requirements.txt matches uv.lock
+        run: make check-requirements
+
+      # Same five commands as `make ci-check`, in the same order and with the same flags (ops/ci).
+      # Five of the ten concurrent background steps a job may have (ops/ci).
       - parallel:
           - name: Check formatting with Ruff
-            run: uv run --frozen ruff format --check .
+            run: uv run --no-sync ruff format --check .
 
           - name: Lint with Ruff
-            run: uv run --frozen ruff check .
+            run: uv run --no-sync ruff check .
 
           - name: Type check with ty
-            run: uv run --frozen ty check --output-format github
+            run: uv run --no-sync ty check --output-format github
 
           - name: Run tests with pytest
-            run: uv run --frozen pytest -q
+            run: uv run --no-sync pytest
 
   docker-lint:
     name: Dockerfile and Compose validation
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
       - parallel:
           - name: Run Docker build checks
@@ -73,32 +95,41 @@ jobs:
           - name: Validate Compose
             run: make docker-config
 
+      - name: Verify pinned base digests
+        uses: ./.github/actions/verify-base-digests
+
   docker-build:
     name: Build runtime image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      # Both builds below must pass the SAME value or they diverge at `ARG APP_VERSION` and stop
+      # sharing the `type=gha` cache from that instruction on (ops/ci). `github.sha`, never
+      # `github.ref_name`, which is attacker-influenceable.
+      APP_VERSION: ${{ github.sha }}
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
       # `load: true` imports into the local daemon so the smoke test steps below can run the image.
       - name: Build runtime image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           target: runtime
           push: false
           load: true
           tags: api-template:runtime
-          # The commit SHA, not `github.ref_name`: a ref name is attacker-influenceable and may
-          # legally contain shell metacharacters, so using it would require sanitizing it first. A
-          # SHA needs none, and it is the more useful provenance value anyway.
           build-args: |
-            APP_VERSION=${{ github.sha }}
+            APP_VERSION=${{ env.APP_VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -112,3 +143,19 @@ jobs:
         uses: ./.github/actions/assert-no-baked-credentials
         with:
           image: api-template:runtime
+
+      # Building this image IS the check - nothing runs it in CI, hence no `load`. Its own cache scope
+      # and `mode=min` (not `max`) are both deliberate (ops/ci).
+      - name: Build reload image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          target: reload
+          push: false
+          load: false
+          build-args: |
+            APP_VERSION=${{ env.APP_VERSION }}
+          cache-from: |
+            type=gha
+            type=gha,scope=reload
+          cache-to: type=gha,mode=min,scope=reload

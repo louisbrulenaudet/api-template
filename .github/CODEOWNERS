@@ -1,0 +1,36 @@
+# Code owners. GitHub auto-requests a review from the owner of every path a pull request touches.
+#
+# Two things to know, because CODEOWNERS is easy to mis-trust:
+#   1. It only takes effect for the copy on the repository's DEFAULT branch.
+#   2. On its own it *requests* review, it does not require it. The enforcement is the
+#      "Require review from Code Owners" setting in the branch ruleset - without that, this file is
+#      advisory only.
+#
+# The per-path entries below are deliberately redundant with the `*` rule while there is one maintainer.
+# They exist so that the day `*` gains a second owner, the supply-chain surface stays narrowly owned
+# instead of silently widening with it. Last matching rule wins, so order matters.
+
+*                       @louisbrulenaudet
+
+# The CI harness. `uses:` refs are pinned by commit SHA, and these workflows carry the only proof in the
+# repository that the runtime image's hardening actually holds (`ops/ci`) - a change here is a
+# supply-chain change, not a config tweak.
+/.github/               @louisbrulenaudet
+
+# Build and dependency surface. `uv.lock` is canonical and `requirements.txt` is the file GitHub's
+# dependency graph reads, so a change to either moves what security alerts are computed against.
+/Dockerfile             @louisbrulenaudet
+/.dockerignore          @louisbrulenaudet
+/compose.yaml           @louisbrulenaudet
+/make/                  @louisbrulenaudet
+/pyproject.toml         @louisbrulenaudet
+/uv.lock                @louisbrulenaudet
+/requirements.txt       @louisbrulenaudet
+
+# Agent harness. Rules, skills and hooks change how every future agent behaves in this repository, and
+# `hooks/` can block or allow git operations outright.
+/AGENTS.md              @louisbrulenaudet
+/CLAUDE.md              @louisbrulenaudet
+/.claude/               @louisbrulenaudet
+/.cursor/               @louisbrulenaudet
+/hooks/                 @louisbrulenaudet

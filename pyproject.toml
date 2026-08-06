@@ -28,23 +28,29 @@ classifiers = [
 ]
 
 requires-python = ">=3.14"
+# The RUNTIME closure, deliberately narrower than `fastapi[standard]` (quality/uv-dependencies).
 dependencies = [
     "aiocache>=0.12.3",
-    # Same as fastapi[standard], but fastapi-cli[standard-no-fastapi-cloud-cli] omits
-    # fastapi-cloud-cli / sentry-sdk (see Astral/FastAPI CLI extras).
-    "fastapi-cli[standard-no-fastapi-cloud-cli]>=0.0.24",
     "fastapi>=0.135.1",
     "httpx2[brotli,http2]>=2.7.0",
-    "jinja2>=3.1.6",
     "pydantic>=2.12.5",
     "pydantic-settings>=2.13.1",
     "python-dotenv>=1.2.2",
+    # NOT prunable as "unused" - `import fastapi` raises without it (quality/uv-dependencies).
     "python-multipart>=0.0.22",
     "uvicorn[standard]>=0.42.0",
 ]
 
 [dependency-groups]
+# Everything needed to run the dev server, and nothing else - its own group so the Docker `reload`
+# stage gets it without the lint/test toolchain (quality/uv-dependencies).
+devserver = [
+    "fastapi-cli[standard-no-fastapi-cloud-cli]>=0.0.24",
+]
 dev = [
+    # `dev` is uv's only default group, so including `devserver` here is what keeps `make dev` and
+    # `make sync` working with no extra flags.
+    { include-group = "devserver" },
     "pre-commit>=4.5.1",
     "pre-commit-uv>=4.2.1",
     "pytest>=9.0.2",
@@ -56,13 +62,10 @@ dev = [
 
 [tool.uv]
 package = false
-required-version = ">=0.11.8"
+# One of this pin's three homes; bump all three together (quality/uv-dependencies).
+required-version = ">=0.12.0"
 exclude-newer = "7 days"
-# httpx2 sits on the outbound critical path; allow current releases past the 7-day
-# freshness gate so security/perf fixes (e.g. 2.7.0) are lockable immediately.
-# ruff is dev-group-only and never enters the runtime image, so its supply-chain blast
-# radius differs from a runtime dependency; exempting it keeps the lint/format toolchain
-# on the current release instead of trailing the soak window by a week.
+# Each exemption needs a reason (quality/uv-dependencies).
 exclude-newer-package = { httpx2 = "0 days", httpcore2 = "0 days", ruff = "0 days" }
 index-strategy = "first-index"
 
@@ -82,78 +85,45 @@ markers = [
 
 [tool.ruff.lint]
 select = [
-    # pycodestyle
     "E",
     "W",
-    # Pyflakes
     "F",
-    # pyupgrade
     "UP",
-    # flake8-bugbear
     "B",
-    # flake8-simplify
     "SIM",
-    # isort
     "I",
-    # flake8-annotations
     "ANN",
-    # flake8-print
     "T20",
-    # Ruff-specific
     "RUF",
-    # FastAPI
     "FAST",
-    # flake8-comprehensions
     "C4",
-    # pep8-naming
     "N",
-    # flake8-pie
     "PIE",
-    # flake8-bandit
     "S",
-    # flake8-pytest-style
     "PT",
-    # flake8-logging
     "LOG",
-    # flake8-logging-format
     "G",
-    # flake8-async
     "ASYNC",
-    # flake8-builtins
     "A",
-    # tryceratops
     "TRY",
-    # flake8-implicit-str-concat
     "ISC",
-    # flake8-datetimez
     "DTZ",
-    # flake8-return
     "RET",
-    # pylint subsets
     "PLC",
     "PLE",
     "PLR",
     "PLW",
-    # pydocstyle
     "D",
-    # perflint (performance anti-patterns)
     "PERF",
-    # flake8-use-pathlib (prefer pathlib over os.path)
-    "PTH",
-    # flynt (implicit string joins -> f-strings)
     "FLY",
-    # flake8-tidy-imports (ban relative imports; see [tool.ruff.lint.flake8-tidy-imports])
-    "TID",
-    # flake8-no-pep420 (no implicit namespace packages)
-    "INP",
-    # flake8-unused-arguments
     "ARG",
-    # flake8-self (no private-member access)
-    "SLF",
-    # pygrep-hooks (no blanket noqa / no unspecified type: ignore)
-    "PGH",
-    # mccabe (cyclomatic complexity; see [tool.ruff.lint.mccabe])
-    "C90",
+    # Ruleset names are not repeated here; run `ruff rule <code>`. These carry a policy:
+    "PTH",  # prefer pathlib over os.path
+    "SLF",  # no private-member access
+    "PGH",  # no blanket noqa, no unspecified `type: ignore`
+    "INP",  # no implicit namespace packages
+    "TID",  # ban relative imports; see [tool.ruff.lint.flake8-tidy-imports]
+    "C90",  # cyclomatic complexity; see [tool.ruff.lint.mccabe]
 ]
 ignore = [
     # Line length is the formatter's job; E501 only fires on strings/comments it
@@ -185,9 +155,7 @@ fixable = ["ALL"]
 unfixable = []
 
 [tool.ruff.lint.per-file-ignores]
-# Tests: allow missing annotations/docstrings, `assert`, unused fixture args,
-# private-member access, module-level import placement, and non-package dirs.
-# pytest-style checks (PT) intentionally stay ENABLED here.
+# pytest-style checks (PT) intentionally stay ENABLED for tests.
 "tests/**" = [
     "ANN",
     "ARG",
@@ -200,8 +168,6 @@ unfixable = []
 ]
 
 [tool.ruff]
-# No `fix = true`: auto-fix stays opt-in (`ruff check --fix`) so a bare `ruff check`
-# in CI reports violations instead of silently fixing them and exiting 0.
 target-version = "py314"
 line-length = 100
 indent-width = 4
@@ -209,26 +175,18 @@ required-version = ">=0.16.0"
 # Ruff already excludes .venv/.git/.ruff_cache/.pytest_cache/build/dist by default;
 # extend (do not replace) that list with generated coverage/site output.
 extend-exclude = ["htmlcov", "site"]
-# Apply `exclude`/`extend-exclude` (and .gitignore) even to paths passed explicitly on the
-# command line. Without this, any caller that names files directly - the VS Code Ruff
-# extension, `hooks/quality/lint-changed.sh` (`ruff check --fix "$FILE"`) - silently lints
-# generated output. The pre-commit hooks already hard-code `--force-exclude` in their entry;
-# setting it here makes every entry point behave the same. https://docs.astral.sh/ruff/settings/#force-exclude
+# Required, not cosmetic: without it any caller that names files directly lints generated output
+# (quality/lint-and-types).
 force-exclude = true
 
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
 skip-magic-trailing-comma = false
-# Default is "auto" (preserve whatever each file already has); pin to LF so Windows
-# contributors and the Linux container produce byte-identical output. Matches .editorconfig.
 line-ending = "lf"
 docstring-code-format = true
-# Ruff 0.16.0 added "*.md" to the default `include` and now formats fenced ```python /
-# ```py / ```pyi blocks in Markdown. That would rewrite 9 agent-facing skill/rule docs
-# under .claude/ and .cursor/. Scoped to the formatter (not top-level `extend-exclude`) so
-# Markdown stays discoverable if `ruff check` gains Markdown support later.
-# https://docs.astral.sh/ruff/formatter/#markdown
+# Keeps the formatter off fenced Python in the agent-facing docs under .claude/ and .cursor/, which
+# Ruff 0.16.0 would otherwise rewrite (quality/lint-and-types).
 exclude = ["*.md"]
 
 [tool.ruff.lint.isort]
@@ -305,10 +263,7 @@ exclude_lines = [
     "if self.debug:",
     "raise NotImplementedError",
     "if __name__ == .__main__.:",
-    # Anchored: these are unanchored regexes matched against the whole line, and a bare "pass"
-    # also matches any identifier containing it - `ProbeBypassMiddleware`, `password`,
-    # `passthrough` - which excludes that line AND the block it introduces. A whole class then
-    # vanishes from the 100% gate while still reporting 100%.
+    # Anchored deliberately - an unanchored "pass" also matches identifiers (quality/testing).
     "^\\s*pass$",
     "raise ImportError",
 ]

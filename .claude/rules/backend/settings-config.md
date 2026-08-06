@@ -1,25 +1,24 @@
 ---
 paths:
-  - "app/core/**"
+  - "app/core/config.py"
+  - "app/core/logging_config.py"
+  - "app/enums/environment.py"
+  - ".env.template"
 ---
 
 # Settings and Config
 
-Pydantic Settings in `app/core/config.py`. Required secrets and identifiers come from the environment, and
-validation is allowed to raise - never invent a silent default for a secret.
+Pydantic Settings in `app/core/config.py`. Required secrets and identifiers come from the environment, and validation is allowed to raise - never invent a silent default for a secret.
 
-- **No `alias=` on settings fields.** pydantic-settings already matches field names to env vars
-  case-insensitively, so `api_key` reads `API_KEY` without help. Only `name` needs one, and it uses
-  `validation_alias="APP_NAME"` plus `populate_by_name=True`. Using `alias=` combined with
-  `extra="ignore"` makes `Settings(name="X")` **silently return the default** instead of raising - a wrong
-  value with no error, which is the worst failure mode available here.
-- **`ENVIRONMENT=production` is the fail-closed gate** (`app/enums/environment.py`).
-  `_enforce_production_hardening` refuses to boot on wildcard `ALLOWED_ORIGINS`/`ALLOWED_HOSTS` or an empty
-  `API_KEY`. Add new "safe locally, unsafe in prod" defaults **to that validator**, not to a comment.
-- **`docs_enabled` is `bool | None`**: `None` derives from the environment (off in production), an explicit
-  value always wins. Read it through the `docs_are_enabled` property, never the raw field.
-- **`@lru_cache(maxsize=1)` belongs only on `get_settings()`.** Do not add unbounded `lru_cache` to
-  user-keyed or async helpers - use aiocache for async TTL caches. Tests interacting with the cached global
-  are covered in [testing.md](../quality/testing.md).
-- **Keep `.env.template` in sync** when adding or removing a settings field - names and comments only, never
-  a real value. It is committed on purpose, so it is the one `.env*` file you may read and edit.
+- **Nothing enforces this:** **no `alias=` on settings fields.** pydantic-settings already matches field names to env vars case-insensitively, so `api_key` reads `API_KEY` without help. Only `name` needs one, and it uses `validation_alias="APP_NAME"` plus `populate_by_name=True`. Using `alias=` combined with `extra="ignore"` makes `Settings(name="X")` **silently return the default** instead of raising - a wrong value, no error, no failing check, which is the worst failure mode available here.
+- **`ENVIRONMENT=production` is the fail-closed gate** (`app/enums/environment.py`). `_enforce_production_hardening` refuses to boot on wildcard `ALLOWED_ORIGINS`/`ALLOWED_HOSTS` or an empty `API_KEY`. Add new "safe locally, unsafe in prod" defaults **to that validator**, not to a comment.
+- **`docs_enabled` is `bool | None`**: `None` derives from the environment (off in production), an explicit value always wins. Read it through the `docs_are_enabled` property, never the raw field.
+- **`@lru_cache(maxsize=1)` belongs only on `get_settings()`.** Do not add unbounded `lru_cache` to user-keyed or async helpers - use aiocache for async TTL caches. Tests interacting with the cached global are covered in [testing.md](../quality/testing.md).
+- **Keep `.env.template` in sync** when adding or removing a settings field - names and comments only, never a real value. It is committed on purpose, so it is the one `.env*` file you may read and edit.
+
+## Logging
+
+`app/core/logging_config.py`, installed by `configure_logging(settings)` from `create_app()`.
+
+- **`dictConfig` is not optional.** Nothing else in the app calls `dictConfig` or `basicConfig`, so without it application `INFO`/`DEBUG` records are discarded outright and `WARNING`+ escapes through `logging.lastResort` with no timestamp, logger name or correlation ID. Uvicorn's own loggers (`uvicorn`, `uvicorn.error`, `uvicorn.access`) are re-pointed at the same handler with `propagate: False`, so application and server output share one format and one stream instead of interleaving two.
+- **`RequestIDFilter` is what makes correlation free.** It reads the `ContextVar` that `RequestIDMiddleware` sets (`backend/middleware.md`), so every handler and service gets the request ID on its records without any call site interpolating `get_request_id()` by hand. The filter is attached to the *handler*, which is the only reason `%(request_id)s` resolves in the plain format - **any new handler must carry it too**, or that format string raises at emit time.

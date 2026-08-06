@@ -9,31 +9,20 @@ The only always-on rule (no `paths:`), so keep it short. Applies to every change
 
 ## Already enforced - you will be blocked, not trusted
 
-`permissions.deny` covers reads/writes of `.env`, keys, credentials, `.netrc`, `.pypirc`, caches,
-`htmlcov/`, `.coverage`, `.git/`, and `uv.lock`. `hooks/git/` blocks staging a secret (fails closed),
-`reset --hard`, `clean -f`, `push --force`, `checkout --`, branch/tag deletion, and any commit or push on
-the default branch. Do not route around a block: if one fires, stop and report it.
+`permissions.deny` covers reads/writes of `.env`, keys, credentials, `.netrc`, `.pypirc`, caches, `htmlcov/`, `.coverage`, `.git/`, and `uv.lock`. `hooks/git/` blocks staging a secret (fails closed), `reset --hard`, `clean -f`, `push --force`, `checkout --`, branch/tag deletion, and any commit or push on the default branch. Do not route around a block: if one fires, stop and report it.
 
 ## Your judgement, because nothing enforces it
 
-- A secret you generated locally stays out of version control, whatever its filename.
+- A secret you generated locally stays out of version control, whatever its filename - and out of an image layer, an `ENV`/`ARG`, or a container's environment, where nothing in this repo will catch it.
 - Commit or push only when asked - never as a side effect of finishing something else.
-- Before deleting or overwriting a file you did not create, read it. If its contents contradict how it was
-  described to you, surface that instead of proceeding.
-- Regenerate generated artifacts via their documented command (`make lock`, Makefile docker targets,
-  tests for `htmlcov/`); never hand-patch the output.
-- Keep a task inside its scope: config, rules, docs, or agent setup must not drift into application
-  source, Docker manifests, or CI unless asked.
+- Before deleting or overwriting a file you did not create, read it. If its contents contradict how it was described to you, surface that instead of proceeding.
+- Regenerate generated artifacts via their documented command (`make lock`, Makefile docker targets, tests for `htmlcov/`); never hand-patch the output.
+- Keep a task inside its scope: config, rules, docs, or agent setup must not drift into application source, Docker manifests, or CI unless asked.
 - Define a shared DTO or `ErrorCodes` member once and import it - see `contracts/pydantic-dtos`.
-- Keep model-facing and untrusted-caller surfaces read/query-oriented. Never expose one that creates,
-  rotates, or deletes long-lived credentials, or takes any other irreversible privileged action.
+- Keep model-facing and untrusted-caller surfaces read/query-oriented. Never expose one that creates, rotates, or deletes long-lived credentials, or takes any other irreversible privileged action.
 
 ## Do not paper over failures
 
 Stated once, here, because every other rule used to repeat it. It is absolute.
 
-Never silence a failing check to reach green - not by disabling a Ruff rule, a blanket `# noqa`, an `Any`,
-a `# ty: ignore` added to clear an error, a skipped test, or a weakened source file, test, CI step, or
-lint/type gate. Fix the cause. A suppression needs a stated reason and is a last resort. If you cannot fix
-it, stop and report the exact command and its output: a failure you reported is a good outcome, a failure
-you hid is not.
+Never silence a failing check to reach green - not by disabling a Ruff rule, a blanket `# noqa`, an `Any`, a `# ty: ignore` added to clear an error, a skipped test, or a weakened source file, test, CI step, or lint/type gate. Fix the cause. A suppression needs a stated reason and is a last resort. If you cannot fix it, stop and report the exact command and its output: a failure you reported is a good outcome, a failure you hid is not.

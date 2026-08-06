@@ -15,11 +15,7 @@ uv run --frozen ruff check .            # lint; NO --fix
 uv run --frozen ty check                # types
 ```
 
-**You are read-only. Never run `make ci`, `make format`, or `ruff` with `--fix`.** `make ci` is
-`format type-check`, and `make format` runs `ruff format .` plus `ruff check . --fix` - it rewrites every
-file in the repo. The caller sees only your summary, so a silent repo-wide reformat would go unreported,
-and a concurrent `test-runner` would be reading files you are rewriting. Formatting belongs to the main
-agent or the post-edit hook, where it is visible. If files need formatting, **say so and stop**.
+**You are read-only. Never run `make ci`, `make format`, or `ruff` with `--fix`.** `make ci` is `format type-check`, and `make format` runs `ruff format .` plus `ruff check . --fix` - it rewrites every file in the repo. The caller sees only your summary, so a silent repo-wide reformat would go unreported, and a concurrent `test-runner` would be reading files you are rewriting. Formatting belongs to the main agent or the post-edit hook, where it is visible. If files need formatting, **say so and stop**.
 
 ## Rules
 

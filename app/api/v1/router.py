@@ -10,17 +10,11 @@ __all__ = [
     "router",
 ]
 
-# The mount point `app.main.create_app` uses, kept here so the probe paths below cannot drift
-# from it.
+# The mount point `app.main.create_app` uses, kept here so the probe paths cannot drift from it.
 API_V1_PREFIX = "/api/v1"
 
-# Fully-qualified paths of the unauthenticated liveness/readiness probes.
-#
-# `app.middlewares.probe_bypass` exempts exactly these from host validation and HTTPS
-# redirection: a container or orchestrator probe reaches the app by IP (`127.0.0.1` for the
-# Dockerfile HEALTHCHECK, the pod IP for a kubelet probe), so it sends a `Host` header that no
-# production `ALLOWED_HOSTS` list can name - the same reason these two routes stay
-# unauthenticated.
+# Exempted from host validation, HTTPS redirection and auth. Read backend/middleware before adding
+# a path here - the exemption is only safe for static, input-free routes.
 PROBE_PATHS: frozenset[str] = frozenset(
     {
         f"{API_V1_PREFIX}/health",
@@ -30,5 +24,4 @@ PROBE_PATHS: frozenset[str] = frozenset(
 
 router = APIRouter()
 
-# Include all routers
 router.include_router(base_router)

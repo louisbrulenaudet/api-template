@@ -22,6 +22,8 @@ Run the production server:
 fastapi run
 ```
 
+**Not in this repo, though.** `fastapi-cli` sits in the `devserver` dependency group here, never in `[project] dependencies`, so it is absent from the Docker `runtime` image: production runs `uvicorn app.main:app` directly, and `make prod` runs the same command locally (bound to loopback rather than `0.0.0.0` - see the comment on that target). Use `fastapi dev` / `make dev` for local development and leave `fastapi run` alone. See `quality/uv-dependencies`.
+
 ### Add an entrypoint in `pyproject.toml`
 
 FastAPI CLI will read the entrypoint in `pyproject.toml` to know where the FastAPI app is declared.

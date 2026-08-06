@@ -5,9 +5,7 @@ description: Pydantic v2 performance and contract practices for this api-templat
 
 # Pydantic (project skill)
 
-Pydantic v2 performance + contract practices for this api-template. Pair with
-`.claude/rules/contracts/pydantic-dtos.md`. The Cursor twin lives at
-`.cursor/skills/pydantic-best-practices/SKILL.md` - keep the two in sync when updating either.
+Pydantic v2 performance + contract practices for this api-template. Pair with `.claude/rules/contracts/pydantic-dtos.md`. The Cursor twin lives at `.cursor/skills/pydantic-best-practices/SKILL.md` - keep the two in sync when updating either.
 
 ## Essentials for this repo
 

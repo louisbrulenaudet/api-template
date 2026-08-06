@@ -1,0 +1,82 @@
+name: Verify pinned base digests
+description: >-
+  Fail if an `@sha256:` base-image pin resolves to a single-platform manifest instead of a multi-arch index, or to an index missing a platform the project is built on. An architecture-specific digest builds fine on an amd64 runner and fails only on a contributor's arm64 machine, so no other gate here can see it.
+
+inputs:
+  files:
+    description: >-
+      Space-separated files to scan for digest-pinned image references. Refs are read out of these rather than listed in the action, so a newly pinned base is covered the moment it is added.
+    required: false
+    default: Dockerfile compose.yaml
+  required-platforms:
+    description: >-
+      Space-separated `os/architecture` values every pinned digest must publish. Variants are ignored, so `linux/arm64` also matches an image that advertises `linux/arm64/v8`.
+    required: false
+    default: linux/amd64 linux/arm64
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        FILES: ${{ inputs.files }}
+        REQUIRED_PLATFORMS: ${{ inputs.required-platforms }}
+      run: |
+        # `${FILES}` / `${REQUIRED_PLATFORMS}` are deliberately unquoted - they must word-split.
+        # `|| true` is required under `-eo pipefail`; the emptiness test below is the real gate (ops/ci).
+        refs=$(grep -hoE '[^[:space:]]+@sha256:[0-9a-f]{64}' ${FILES} | sort -u || true)
+        if [ -z "${refs}" ]; then
+          echo "::error::no digest-pinned references found in '${FILES}' - has a base image lost its @sha256: pin?"
+          exit 1
+        fi
+
+        # Every ref is checked before exiting, so one bad pin does not hide another.
+        status=0
+
+        for ref in ${refs}; do
+          # `--raw`, not `--format`: the template fields are struct internals (ops/ci).
+          if ! raw=$(docker buildx imagetools inspect "${ref}" --raw); then
+            echo "::error::${ref} - cannot inspect. Either the registry is unreachable or this digest no longer exists."
+            status=1
+            continue
+          fi
+
+          # Reported as a diagnostic only - never the discriminator, since it is optional at an index
+          # root. The `manifests[]` presence test below is the gate (ops/ci).
+          media_type=$(jq -r '.mediaType // "(absent)"' <<< "${raw}")
+
+          if ! jq -e '(.manifests | type == "array") and (.manifests | length > 0)' <<< "${raw}" >/dev/null; then
+            echo "::error::${ref} carries no manifests[] (mediaType: '${media_type}'), so it is a single-platform manifest, not a multi-arch index - this digest is architecture-specific and will break the build on any other platform. Re-resolve the tag's index digest with: docker buildx imagetools inspect <tag> --format '{{.Manifest.Digest}}'"
+            status=1
+            continue
+          fi
+
+          # `os/architecture` only, so `linux/arm64` matches `linux/arm64/v8`; attestation entries
+          # (`unknown/unknown`) are filtered out (ops/ci).
+          platforms=$(
+            jq -r '
+              [ .manifests[]?
+                | select(.platform.os and .platform.os != "unknown")
+                | "\(.platform.os)/\(.platform.architecture)"
+              ] | unique | join(" ")
+            ' <<< "${raw}"
+          )
+
+          missing=""
+          for want in ${REQUIRED_PLATFORMS}; do
+            case " ${platforms} " in
+              *" ${want} "*) ;;
+              *) missing="${missing} ${want}" ;;
+            esac
+          done
+
+          if [ -n "${missing}" ]; then
+            echo "::error::${ref} is a multi-arch index but publishes no manifest for:${missing} (it has: ${platforms})"
+            status=1
+            continue
+          fi
+
+          echo "✅ ${ref} — index covering ${platforms}"
+        done
+
+        exit "${status}"

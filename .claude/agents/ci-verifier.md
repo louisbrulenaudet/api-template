@@ -19,21 +19,17 @@ uv run --frozen ruff check .            # lint; NO --fix
 uv run --frozen ty check                # types
 ```
 
-**You are read-only. Never run `make ci`, `make format`, or `ruff` with `--fix`.** Those rewrite every
-file in the repo. That matters more than it looks:
+**You are read-only. Never run `make ci`, `make format`, or `ruff` with `--fix`.** Those rewrite every file in the repo. That matters more than it looks:
 
 - The main agent sees only your summary, so a silent repo-wide reformat would go unreported.
-- Changes made through Bash bypass the `PostToolUse` Ruff hook and are not captured by checkpoints, so
-  `/rewind` cannot undo them.
+- Changes made through Bash bypass the `PostToolUse` Ruff hook and are not captured by checkpoints, so `/rewind` cannot undo them.
 - A concurrent `test-runner` would be reading files you are rewriting.
 
-Formatting belongs to the main thread or the edit hook, where it is visible and reversible. If files need
-formatting, **say so and stop**.
+Formatting belongs to the main thread or the edit hook, where it is visible and reversible. If files need formatting, **say so and stop**.
 
 ## Rules
 
-- Do not suppress diagnostics to clear the gate: no `# noqa`, no blanket ignore, no `Any`, no
-  `# ty: ignore`. Fix nothing; report. See `.claude/rules/core/guardrails.md`.
+- Do not suppress diagnostics to clear the gate: no `# noqa`, no blanket ignore, no `Any`, no `# ty: ignore`. Fix nothing; report. See `.claude/rules/core/guardrails.md`.
 - Distinguish source failures from missing dependencies or environment setup (`make sync` needed).
 
 ## Output format
@@ -48,5 +44,4 @@ formatting, **say so and stop**.
 CI gate: PASS (ruff + ty clean)  |  FAIL (X lint/format, Y type remaining)
 ```
 
-**≤15 lines total.** One line per diagnostic. Never paste raw tool output, passing-task noise, or the
-contents of files you read.
+**≤15 lines total.** One line per diagnostic. Never paste raw tool output, passing-task noise, or the contents of files you read.

@@ -30,7 +30,8 @@ def _render(
 ) -> JSONResponse:
     """Serialize an `ErrorResponse` through Pydantic so the DTO stays the only wire shape.
 
-    The correlation header is set here rather than left to `RequestIDMiddleware`, because the catch-all handler's response is emitted by ServerErrorMiddleware - outside that middleware - and would otherwise ship without an `X-Request-ID` for the client to quote.
+    Sets the correlation header itself rather than leaving it to `RequestIDMiddleware`, which never
+    sees the catch-all handler's response (backend/exceptions).
     """
     return JSONResponse(
         status_code=status_code,
@@ -42,10 +43,8 @@ def _render(
 def register_exception_handlers(app: FastAPI) -> None:
     """Register the application's global exception handlers on ``app``.
 
-    Every handler answers with the same `ErrorResponse` envelope, tagged with the request's correlation ID. Without the validation / HTTP / catch-all handlers, FastAPI's defaults would return two other shapes (`{"detail": ...}` and a plain-text `Internal Server Error`), leaving clients to parse three different error formats from one API.
-
-    Args:
-        app: The FastAPI application to register handlers on.
+    All four are load-bearing: dropping any one lets a second error shape onto the wire
+    (backend/exceptions).
     """
 
     @app.exception_handler(CoreError)
@@ -61,8 +60,7 @@ def register_exception_handlers(app: FastAPI) -> None:
             exc.message,
             exc.code,
             exc.details,
-            # Server-side faults need the traceback; client faults (4xx) are expected and
-            # would only add noise.
+            # 5xx only - a 4xx traceback is expected noise.
             exc_info=exc if is_server_error else None,
         )
 
@@ -71,8 +69,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                 error=exc.__class__.__name__,
                 message=exc.message,
                 code=exc.code,
-                # A 5xx `details` describes an internal failure (an upstream exception string,
-                # a config problem) and is logged above rather than returned to the caller.
+                # Withheld on 5xx and logged above instead (backend/exceptions).
                 details=None if is_server_error else exc.details,
                 request_id=request_id,
             ),
@@ -123,14 +120,9 @@ def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(Exception)
     async def _handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:
         """Last resort: log the traceback and return an opaque 500."""
-        # `exc_info=exc` rather than `logger.exception(...)`: this is a registered handler, not
-        # an `except` block, so it must not depend on an ambient `sys.exc_info()` to find the
-        # traceback (and `.exception()` here trips Ruff LOG004 for that reason).
-        #
-        # Note: Starlette's ServerErrorMiddleware re-raises after calling this handler, so the
-        # server logger records the traceback a second time. That duplication is the price of
-        # having one copy carry the correlation ID - which is the copy an operator can actually
-        # tie back to a client report.
+        # `exc_info=exc`, not `logger.exception(...)`: a registered handler is not an `except`
+        # block, so there is no ambient `sys.exc_info()` (and `.exception()` trips Ruff LOG004).
+        # This traceback is logged twice, deliberately (backend/exceptions).
         logger.error(
             "Unhandled %s escaped the application",
             exc.__class__.__name__,
@@ -140,8 +132,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         return _render(
             ErrorResponse(
                 error="InternalServerError",
-                # Deliberately generic: the exception text may name internal paths, hosts or
-                # query fragments. The traceback goes to the log, not to the client.
+                # Generic on purpose - exception text may name internal paths or hosts.
                 message="An internal server error occurred.",
                 code=ErrorCodes.INTERNAL_ERROR,
                 details=None,
