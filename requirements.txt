@@ -15,7 +15,7 @@ brotli==1.2.0 ; platform_python_implementation == 'CPython'
     # via httpx2
 brotlicffi==1.2.0.1 ; platform_python_implementation != 'CPython'
     # via httpx2
-cffi==2.1.0 ; platform_python_implementation != 'CPython'
+cffi==2.1.1 ; platform_python_implementation != 'CPython'
     # via brotlicffi
 click==8.4.2
     # via uvicorn
@@ -27,7 +27,7 @@ h11==0.16.0
     # via
     #   httpcore2
     #   uvicorn
-h2==4.4.0
+h2==4.4.1
     # via httpx2
 hpack==4.2.0
     # via h2
@@ -50,7 +50,7 @@ pydantic==2.13.4
     #   backend
     #   fastapi
     #   pydantic-settings
-pydantic-core==2.46.4
+pydantic-core==2.47.0
     # via pydantic
 pydantic-settings==2.14.2
     # via backend
@@ -80,11 +80,11 @@ typing-inspection==0.4.2
     #   fastapi
     #   pydantic
     #   pydantic-settings
-uvicorn==0.51.0
+uvicorn==0.52.1
     # via backend
 uvloop==0.22.1 ; platform_python_implementation != 'PyPy' and sys_platform != 'cygwin' and sys_platform != 'win32'
     # via uvicorn
 watchfiles==1.2.0
     # via uvicorn
-websockets==16.1.1
+websockets==17.0.1
     # via uvicorn
