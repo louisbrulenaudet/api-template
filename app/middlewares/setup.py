@@ -17,21 +17,12 @@ __all__ = [
 def configure_middleware(app: FastAPI, settings: Settings) -> None:
     """Register the application middleware stack on ``app``.
 
-    Middleware is applied in LIFO order: the LAST added is the OUTERMOST (first to see the request, last to touch the response). The add order below therefore yields this request-processing order:
+    Added LIFO, so the last added is outermost. That yields this request-processing order:
 
         CORS -> RequestID -> SecurityHeaders -> ProbeBypass{TrustedHost -> [HTTPSRedirect]} -> GZip -> routes
 
-    `ProbeBypassMiddleware` owns host validation and HTTPS redirection as one unit rather than registering them separately, because the probe paths have to skip both together - see its docstring.
-
-    Three orderings are load-bearing:
-
-    * **CORS outermost** so an `OPTIONS` preflight is answered before any redirect or compression touches it.
-    * **TrustedHost before HTTPSRedirect** (inside `ProbeBypassMiddleware`). `HTTPSRedirectMiddleware` builds its `Location` from the request's `Host` header. Validating the host first is what stops a spoofed `Host` from turning that redirect into an open redirect to an attacker's domain.
-    * **SecurityHeaders outside the bypass** so the short-circuit responses (a 400 invalid-host, a 307 redirect) carry the headers too.
-
-    Args:
-        app: The FastAPI application to configure.
-        settings: The application settings driving CORS, host and HTTPS behavior.
+    Three of those orderings are load-bearing and must not be "tidied" - see
+    `.claude/rules/backend/middleware.md` before reordering anything here.
     """
     app.add_middleware(
         GZipMiddleware,
@@ -39,9 +30,7 @@ def configure_middleware(app: FastAPI, settings: Settings) -> None:
         compresslevel=5,
     )
 
-    # Host-header validation plus optional HTTPS redirection. `["*"]` (the local default) makes
-    # the host check a no-op; production rejects that wildcard at startup, so a prod app always
-    # has an explicit host list - which is exactly why the probes need an exemption from it.
+    # Host validation plus optional HTTPS redirection, as one unit.
     app.add_middleware(
         ProbeBypassMiddleware,
         allowed_hosts=settings.allowed_hosts,
@@ -52,20 +41,15 @@ def configure_middleware(app: FastAPI, settings: Settings) -> None:
     # HSTS only where TLS is actually terminated, which `force_https` is the signal for.
     app.add_middleware(SecurityHeadersMiddleware, hsts=settings.force_https)
 
-    # Correlation ID: assign/propagate X-Request-ID (exposed to browsers via CORS below).
     app.add_middleware(RequestIDMiddleware)
 
-    # CORS must be outermost. Origins/credentials come from Settings - the local default is
-    # allow-all; production rejects a wildcard, and wildcard + credentials is rejected in
-    # every environment.
+    # Must stay outermost.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.allowed_origins,
         allow_credentials=settings.allow_credentials,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        # `X-Request-ID` is accepted inbound (callers may supply their own trace ID) as well as
-        # exposed outbound; omitting it here would make the documented correlation flow fail
-        # preflight for browser clients. `X-API-Key` is the auth header from `app.core.security`.
+        # Dropping X-Request-ID or X-API-Key here fails preflight for browser clients.
         allow_headers=[
             "Accept",
             "Authorization",

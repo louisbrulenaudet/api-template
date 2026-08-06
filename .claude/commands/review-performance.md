@@ -3,96 +3,47 @@ description: Performance review - hot-path complexity, blocking I/O in async pat
 argument-hint: [scope: files, directory, or "all"]
 ---
 
-# Review performance command
+# Review performance
 
-Run a **performance-focused** review: algorithmic complexity on hot paths, async I/O correctness (no blocking calls), Pydantic validation overhead, caching strategy (`aiocache`) usage, retry/timeout behavior, middleware cost (e.g. GZip), and memory growth risks. Your reply must be a **plan of suggested changes**: concise, actionable, and structured-not only prose.
+Review request-path cost: blocking I/O, complexity, validation overhead, caching, outbound calls, middleware. Reply with a **plan only**: no edits, no implementation unless asked.
 
-## Command usage
+## Scope
 
-This file is a Claude Code slash command: plain Markdown in `.claude/commands/`. When the user runs `/review-performance` in chat, this content is sent as the prompt and runs in the current conversation.
+Default to **the change under review**: `git diff`, `git diff --cached`, and untracked files. `$ARGUMENTS` overrides it. On `all`, say what you read and what you sampled.
 
-- **Parameters:** `$ARGUMENTS` is scope-e.g. `/review-performance endpoints`, `/review-performance aiocache`, `/review-performance httpx2`, `/review-performance retry/middleware`-narrow accordingly. If empty, assume full performance review (endpoints/core + caching + outbound I/O + middleware).
+**Reason about the request path, not the whole tree.** A performance finding needs a caller: trace from a route handler outward through what it awaits. Code no request reaches is not a performance finding, however inefficient - say that rather than reporting it.
 
-This command is project-scoped and works alongside the path rules in `.claude/rules/`. For a full review use `/review` instead.
+## Authority
 
-## Best practices alignment
+`.cursor/rules/` is authoritative; reading a file loads its rules, so **cite them and do not restate them**. Handler shape is `backend/fastapi-routes`; the service boundary is `backend/services`; the middleware stack and lifespan resources are `backend/middleware`; the shared outbound client is `backend/middleware` too; DTO and validator cost is `contracts/pydantic-dtos`. Framework-level patterns are the `fastapi` and `pydantic-best-practices` skills.
 
-- **Hot-path efficiency** - Prefer O(n) or better in request-critical logic; avoid repeated list scans; avoid sorting inside handlers unless required.
-- **Async/event-loop safety** - `async def` paths must not perform blocking I/O (no `time.sleep`, sync file reads, sync network/DB calls); outbound calls use the shared `httpx2.AsyncClient` and timeouts.
-- **Pydantic validation cost** - Validators are lightweight; avoid expensive computations in `model_validator`/field validators; keep DTOs minimal.
-- **Caching strategy (`aiocache`)** - Cache only when consistent/safe; choose correct cache keys + TTLs; prevent unbounded growth.
-- **Middleware cost** - Middleware (e.g. `GZipMiddleware`) is configured appropriately (thresholds match expected payload sizes) and does not add unnecessary per-request overhead.
+## Rank by evidence, not suspicion
 
-Relevant path rules live in `.claude/rules/backend/fastapi-routes.md`, `.claude/rules/backend/services.md`, `.claude/rules/backend/middleware.md`, and `.claude/rules/contracts/pydantic-dtos.md` - open them explicitly, since only `.claude/rules/core/guardrails.md` is always-on and the rest are path-scoped.
+This is a reasoning review with no profiler, so **a claim you cannot ground is worse than silence**. For every finding, state the mechanism and the trigger: which request, what input size, and why the cost grows. "This could be slow" is not a finding.
 
-## Deep technical review
+Rank in this order:
 
-Conduct a performance-only review. Inspect the following and call out violations or improvements.
+1. **Correctness-shaped performance bugs** - a blocking call on an async path, a missing timeout, a per-request client. These are unbounded, not merely slow, and they degrade every concurrent request rather than one.
+2. **Cost that grows with input** on a path a request reaches.
+3. **Constant-factor tuning.** Usually `Nit:` territory. An unmeasured micro-optimisation traded against readability is a bad trade - say so.
 
-### Algorithmic complexity and data structures
+## What to examine
 
-- **Checks:** No O(n²) or worse in request hot paths (e.g. nested loops over large inputs). Avoid repeated linear scans; prefer dict/set lookups. No sorting inside request handlers unless required. Apply pagination/limits for large lists.
+- **Blocking I/O inside `async def`.** `time.sleep`, sync file reads, a sync HTTP or DB call. One of these stalls the whole event loop, so it is the highest-severity thing here. Conversely a plain `def` handler that only builds a DTO pays a threadpool hop for nothing.
+- **Outbound HTTP.** Requests go through the shared lifespan-scoped client injected with `Depends(get_http_client)` - never a client constructed per request, which throws away connection reuse and HTTP/2 and leaks sockets under load. Every outbound call needs a timeout: without one a slow upstream converts into unbounded latency here.
+- **Retry behaviour.** Retries multiply load on an already-failing dependency. Check that backoff is jittered, that a non-retryable error is not being retried, and that the retry budget cannot stack with a caller's own.
+- **Complexity on a reached path.** Nested scans over request-sized input; a linear scan where a dict or set lookup fits; sorting inside a handler that did not need order; unbounded list endpoints with no pagination or limit.
+- **Validation cost.** Heavy work in a validator runs on every request. Watch for CPU-bound work or, worse, an outbound call inside one. `wrap` validators are the most expensive form - avoid them on hot paths. Prefer `model_validate_json` over parsing then validating, and instantiate a `TypeAdapter` once rather than per call.
+- **Cache keys and TTL.** A key missing a parameter that changes the result serves the wrong response - a correctness bug wearing a performance costume, so rank it as Critical. TTL is the only eviction this backend has: no TTL means unbounded growth. `maxsize` is not accepted in the alias config and raises lazily inside a route.
+- **Long-lived state.** Module-level containers that only grow; per-request data captured in something that outlives the request; an unbounded `lru_cache` on a user-keyed or async helper (that decorator belongs on `get_settings` alone - use the async cache for anything keyed by a caller).
+- **Middleware overhead.** Every middleware runs on every request, so ordering and thresholds matter: a compression threshold below typical payload size spends CPU to save nothing. Pure-ASGI middleware is cheaper than `BaseHTTPMiddleware`, and some of this stack is pure ASGI deliberately - do not "simplify" one into the other.
 
-### Async I/O and blocking calls
+## Output
 
-- **Checks:** `async def` paths must not perform blocking I/O (no `time.sleep`, sync file reads, or sync network/DB calls). Outbound HTTP uses the shared `httpx2.AsyncClient` (connection reuse, HTTP/2, timeouts).
+**Critical** (blocking call on an async path, missing timeout, per-request client, wrong or unbounded cache) → **Improvements** → **Optional** (prefix `Nit:`).
 
-### Pydantic validation overhead
+Each item: **what**, **where** (`file:line`), **why it costs** - stating the trigger and how the cost scales - and any **trade-off** (TTL against freshness, retries against load). If no rule governs it and you cannot ground the mechanism, it is not a finding. One line per clean sub-area; silence is a valid result.
 
-- **Checks:** Validators are lightweight (no CPU-heavy work or outbound calls). DTOs are minimal; avoid constructing large intermediate objects during validation.
+## Constraints
 
-### Caching strategy (aiocache)
-
-- **Checks:** Cache keys include all relevant parameters; TTL matches consistency requirements; cached values are safe to store/serialize; avoid unbounded growth.
-
-### Memory growth and long-lived state
-
-- **Checks:** No unbounded in-memory caches or module-level growth. Decorators/retry utilities do not capture request-specific data in global state.
-
-### Anti-patterns to flag
-
-- Blocking calls inside `async def` handlers (sync IO/sleeps).
-- Heavy work inside Pydantic validators (CPU-heavy or outbound calls).
-- `aiocache` usage with missing TTL (effectively unbounded) or overly broad keys (collisions).
-- Outbound `httpx2` requests without timeouts (hung requests / latency spikes).
-- Creating a new `httpx2.AsyncClient` per request instead of using `Depends(get_http_client)`.
-
-## Steps
-
-1. **Gather scope** - Full performance review or the specific area given in `$ARGUMENTS` (endpoints/core hot paths, Pydantic validation, `aiocache`, outbound `httpx2`, retry/middleware). Default to full.
-2. **Inspect hot paths** - reason about complexity and repeated work; validate limits/pagination.
-3. **Inspect async I/O** - identify blocking calls inside `async def`, ensure timeouts and connection reuse for outbound requests.
-4. **Inspect Pydantic validation overhead** - ensure validators are lightweight and DTOs are not excessively large/complex.
-5. **Inspect caching + retry utilities** - `aiocache` key/TTL correctness, and that retry behavior is not causing retry storms or latency spikes.
-6. **Inspect middleware cost** - validate GZip thresholds and that middleware ordering is intentional.
-7. **Compose plan** - Critical / Improvements / Optional; each item: **what**, **where**, **why**. One-line "no issues" per sub-area if none.
-
-This review is read-only and reasoning-based: do not run benchmarks, servers, or mutating commands. `make format` and `make ci` rewrite files (`ruff format .` plus `ruff check . --fix`); the non-mutating equivalents are `make check` and `make type-check`.
-
-## Checklist
-
-- [ ] Scope clear
-- [ ] Algorithmic complexity and data structures reviewed
-- [ ] Async I/O and blocking-call risks reviewed
-- [ ] Pydantic validation overhead reviewed
-- [ ] Caching strategy (`aiocache`) reviewed
-- [ ] Memory and long-lived state reviewed
-- [ ] Plan structured as Critical / Improvements / Optional with what/where/why
-
-## Review checklist
-
-- **Correctness:** Complexity claims and caching semantics are accurate; no incorrect optimizations.
-- **Quality:** Measurable or reasoned impact (e.g. reduces request latency or CPU usage).
-- **Actionability:** Every suggestion is implementable (e.g. extract a hot-path helper, add timeouts, tighten cache keys/TTL).
-- **Trade-offs:** Note any (e.g. cache TTL vs freshness, retry aggressiveness vs latency).
-- **Scope:** Performance only; defer correctness/security to their reviews.
-
-## Output format
-
-Respond with a **plan** only (no implementation unless the user asks):
-
-1. **Critical** – Must-fix (severe complexity, memory growth risk, broken/unsafe caching, blocking I/O in async paths, missing timeouts causing hung requests).
-2. **Improvements** – Worthwhile (better data structure, correct `aiocache` key/TTL strategy, Pydantic validator optimizations, improved retry behavior).
-3. **Optional** – Nice-to-haves (minor refactors for latency/CPU, middleware threshold tuning). Prefix with **Nit:** for non-blocking polish.
-
-For each item: **what** to change, **where** (file/area), and **why**. If a sub-area has no findings, state it in one line.
+Read-only and reasoning-only: no benchmarks, no servers, no load generators. `make check` and `make type-check` are non-mutating; `make format` and `make ci` rewrite files. Defer architecture, code quality and security to their own commands.

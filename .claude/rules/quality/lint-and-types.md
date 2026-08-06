@@ -1,0 +1,33 @@
+---
+paths:
+  - "pyproject.toml"
+  - ".pre-commit-config.yaml"
+  - ".vscode/settings.json"
+  - "hooks/quality/**"
+---
+
+# Ruff and ty configuration
+
+Values live in [`pyproject.toml`](../../../pyproject.toml); `quality/python-style.md` deliberately does not copy them. What is recorded here are the *decisions* - the settings whose reason is not visible from the key. Dependency declarations are in [`uv-dependencies.md`](uv-dependencies.md).
+
+## Type safety (ty)
+
+ty is the **sole** type checker and LSP. Do not add a mypy or pyright config.
+
+- **Suppressions must be `# ty: ignore[rule-name]`.** `analysis.respect-type-ignore-comments = false`, so a mypy-style `# type: ignore` suppresses nothing - it is just a comment. A bare `# ty: ignore` is an error (`blanket-ignore-comment`), and stale or misspelled ones fail too (`unused-ignore-comment`, `ignore-comment-unknown-rule`). Restated in `quality/python-style.md`, which is where you are when you write one. When a suppression is legitimate, see [`guardrails.md`](../core/guardrails.md) for the bar it has to clear.
+- **Strictness budget.** `terminal.error-on-warning = true` makes `warn`-level rules fail the gate too, so the only real lever is ty's off-by-default rules, and `[tool.ty.rules]` enables all but one of them. `possibly-unresolved-reference` stays off because ty disables it for false positives. Curated-strict is deliberate over `all = "error"`: a ty upgrade must not silently promote a new rule into a hard failure. *(Rule counts were checked against the pinned ty 0.0.59 - re-check them, don't trust them, after a bump.)*
+- **Nothing enforces this:** **`src.include` is an allowlist** (`["app", "tests"]`). A new top-level Python package - a `scripts/`, a root `conftest.py` - is silently **unchecked** until you add it there, and `ty check` still exits 0. This is the trap most likely to bite you.
+- **`src.exclude` extends** ty's built-in defaults rather than replacing them; a `!pattern` entry re-includes a default. `__pycache__` is *not* a ty default, hence the explicit entry.
+- **`environment.python-platform = "linux"`** keeps local diagnostics identical to CI and the container. `python-version` is intentionally left to ty's inference from `project.requires-python`.
+- **Do not add `analysis.strict-literal-narrowing`.** Valid on the pinned ty, but renamed `strict-equality-semantics` upstream - and an unknown key is a hard TOML parse error, so it would break `ty check` outright the moment the pin moves. Revisit when bumping ty.
+- **Relax per-path with `[[tool.ty.overrides]]`**, never by loosening the global rules. Later overrides win; `exclude` beats `include`.
+- **`ty check` takes no path argument** anywhere - Makefile, pre-commit or CI. A CLI path bypasses `[tool.ty.src]` include/exclude entirely, so the allowlist above stops applying. This is why the local pre-commit hook sets `pass_filenames: false` and `always_run: true`: pre-commit would otherwise append the changed filenames and silently widen the check to files `src.exclude` rules out.
+
+## Ruff
+
+- **`force-exclude = true`.** Applies `exclude` / `extend-exclude` (and `.gitignore`) even to paths named explicitly on the command line. Without it, every caller that passes files directly - the VS Code Ruff extension (`.vscode/settings.json`), `hooks/quality/lint-changed.sh` (`ruff check --fix "$FILE"`) - silently lints generated output. The pre-commit hooks already hard-code `--force-exclude`; setting it here makes every entry point behave the same.
+- **`[tool.ruff.format] exclude = ["*.md"]`.** Ruff 0.16.0 added `*.md` to the default `include` and now formats fenced ` ```python ` / ` ```py ` / ` ```pyi ` blocks inside Markdown - which would rewrite the agent-facing skill and rule docs under `.claude/` and `.cursor/`. Scoped to the **formatter**, not top-level `extend-exclude`, so Markdown stays discoverable if `ruff check` gains Markdown support later. This is also why relocating a Python snippet from a comment into a rule file is safe: nothing reformats it there.
+- **No `fix = true`.** Auto-fix stays opt-in (`ruff check --fix`) so a bare `ruff check` in CI reports violations instead of silently fixing them and exiting 0.
+- **`line-ending = "lf"`**, not the `"auto"` default, so Windows contributors and the Linux container produce byte-identical output.
+- **Nothing enforces this:** **Ruff's version has two homes.** The `ruff` pin in the `dev` group (via `pyproject.toml` / `uv.lock`) and `rev:` in [`.pre-commit-config.yaml`](../../../.pre-commit-config.yaml). Nothing compares them, so pre-commit can silently format to a different Ruff's rules than `make ci` does. The config comment on that `rev:` says to keep them in sync - Dependabot's `uv` ecosystem moves only the first.
+- **Hook order is Ruff's documented order, not a preference:** `ruff-check --fix` runs **before** `ruff-format`. Reversing it lets a lint autofix reintroduce formatting the formatter had already settled. The `id: ruff-format` entry is also load-bearing - the previous config used `id: ruff` there, which silently ran `ruff check` a second time and never formatted at all.

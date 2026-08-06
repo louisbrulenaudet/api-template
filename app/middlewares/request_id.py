@@ -15,21 +15,13 @@ __all__ = [
 
 REQUEST_ID_HEADER = "X-Request-ID"
 
-# The ID is published twice, deliberately:
-#   * a ContextVar, so any logger can pick it up with no plumbing (see `RequestIDFilter`);
-#   * the ASGI scope, so it survives past this middleware's `finally: reset(token)`.
-# The second one matters for the catch-all `Exception` handler: that runs inside Starlette's
-# ServerErrorMiddleware, which sits OUTSIDE all user middleware, so by then the ContextVar has
-# already been reset and would read as "". `request_id_from()` is the accessor that works in
-# both places.
+# Published to the scope as well as the ContextVar, because the ContextVar is already reset by the
+# time the catch-all handler runs (backend/exceptions).
 _SCOPE_KEY = "request_id"
 
-# An inbound correlation ID is attacker-controlled input that ends up in log lines and in a
-# response header. Constraining it to a conservative token charset (and a sane length) is what
-# stops a caller from forging log records with embedded newlines, smuggling ANSI escapes into
-# an operator's terminal, or bloating every log line with a megabyte-long "ID". Anything that
-# does not match is replaced by a fresh UUID rather than rejected, so a badly-behaved proxy
-# degrades to "no correlation" instead of failing the request.
+# An inbound ID is attacker-controlled and reaches log lines and a response header, so the charset is
+# a log-forging guard (backend/middleware). The length cap also stops a megabyte-long "ID"; a
+# non-matching value degrades to a fresh UUID rather than failing the request.
 _MAX_LENGTH = 128
 _SAFE_REQUEST_ID = re.compile(r"\A[A-Za-z0-9._:@/+=-]+\Z")
 
@@ -47,13 +39,8 @@ def get_request_id() -> str:
 def request_id_from(request: Request) -> str:
     """Return the correlation ID for ``request``, even outside the middleware's context.
 
-    Reads the scope copy first and falls back to the `ContextVar`. `request.state` is an untyped `Any` bag, so the value is re-checked with `isinstance` rather than trusted from an annotation - the same boundary discipline as `app.core.http_client.get_http_client`.
-
-    Args:
-        request: The request whose correlation ID is wanted.
-
-    Returns:
-        str: The correlation ID, or an empty string if none was assigned.
+    Reads the scope copy first and falls back to the `ContextVar`. The `isinstance` re-checks are the
+    `app.state` boundary discipline, not redundancy (backend/middleware).
     """
     state = request.scope.get("state")
     if isinstance(state, dict):
@@ -73,9 +60,9 @@ def _coerce_request_id(inbound: str | None) -> str:
 class RequestIDMiddleware:
     """Pure-ASGI middleware that assigns an ``X-Request-ID`` correlation header.
 
-    Reads an inbound ``X-Request-ID`` (e.g. set by an upstream proxy / load balancer) or generates a UUID4, exposes it via :func:`get_request_id` for structured logging, and echoes it on the response so clients can quote it when reporting problems.
-
-    Implemented as pure ASGI rather than ``BaseHTTPMiddleware`` so the ``ContextVar`` propagates to downstream handlers and loggers - Starlette documents that ``BaseHTTPMiddleware`` prevents ``contextvars`` changes from propagating upwards.
+    Reads an inbound ``X-Request-ID`` or generates a UUID4, exposes it via :func:`get_request_id`, and
+    echoes it on the response. Pure ASGI rather than ``BaseHTTPMiddleware`` so the ``ContextVar``
+    propagates downstream (backend/middleware).
     """
 
     def __init__(self, app: ASGIApp) -> None:

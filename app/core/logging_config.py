@@ -17,22 +17,15 @@ __all__ = [
 # The `LogRecord` attribute the filter injects and the formatters read.
 RECORD_REQUEST_ID_KEY = "request_id"
 
-# Named `logging_config` rather than `logging` so the module does not shadow the stdlib one
-# (Ruff A005) for anything importing `app.core.*`.
-
 
 class RequestIDFilter(logging.Filter):
-    """Attach the current request's correlation ID to every log record.
-
-    `RequestIDMiddleware` stores the ID in a `ContextVar`; reading it here means handlers and services get correlated logs for free, instead of each call site having to interpolate `get_request_id()` by hand.
-    """
+    """Attach the current request's correlation ID to every log record (backend/settings-config)."""
 
     @override
     def filter(self, record: logging.LogRecord) -> bool:
         """Set `record.request_id` and always keep the record."""
-        # Written through `__dict__` because that is how `logging` itself injects `extra=` fields:
-        # `request_id` is not a declared `LogRecord` attribute, so assigning it directly is an
-        # unchecked attribute write that ty rightly rejects.
+        # Via `__dict__`, which is how `logging` injects `extra=` fields; direct assignment is an
+        # unchecked attribute write that ty rejects.
         record.__dict__[RECORD_REQUEST_ID_KEY] = get_request_id()
         return True
 
@@ -60,10 +53,7 @@ class JsonFormatter(logging.Formatter):
 def configure_logging(settings: Settings) -> None:
     """Install the application-wide logging configuration.
 
-    Without this, nothing ever calls `dictConfig`/`basicConfig`: app `INFO`/`DEBUG` records are discarded and `WARNING`+ escapes through `logging.lastResort` with no timestamp, logger name or correlation ID. Uvicorn's own loggers are re-pointed at the same handler so application and server output share one format and one stream.
-
-    Args:
-        settings: Supplies the level and whether to emit JSON.
+    Not optional - without it app records are dropped entirely (backend/settings-config).
     """
     formatter = "json" if settings.log_json else "plain"
     uvicorn_logger = {

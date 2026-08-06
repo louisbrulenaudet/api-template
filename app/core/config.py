@@ -44,7 +44,8 @@ def _split_csv(value: object) -> object:
 class Settings(BaseSettings):
     """Configuration settings for the application, validated by Pydantic.
 
-    Field names map to environment variables case-insensitively, so `api_key` reads `API_KEY` with no alias needed. `populate_by_name=True` keeps `Settings(name=...)` working in tests - without it, `name=` would be swallowed by `extra="ignore"` and silently replaced by the default.
+    Field names map to env vars case-insensitively, so no field needs an `alias=`
+    (backend/settings-config).
     """
 
     model_config = SettingsConfigDict(
@@ -65,7 +66,6 @@ class Settings(BaseSettings):
     version: str = Field(default_factory=_get_package_version)
     service_start_time: float = Field(default_factory=time.monotonic, exclude=True)
 
-    # Secret: masked in logs/repr; read the raw value via `api_key.get_secret_value()`.
     api_key: SecretStr = Field(default=SecretStr(""))
     api_client: str = Field(default="")
 
@@ -75,8 +75,7 @@ class Settings(BaseSettings):
         description="ASGI root_path when mounted under a sub-path by a proxy (see FastAPI docs).",
     )
 
-    # `None` means "derive from environment": enabled outside production, disabled in it.
-    # An explicit true/false always wins, so docs can be published deliberately.
+    # `None` derives from the environment; read via `docs_are_enabled` (backend/settings-config).
     docs_enabled: bool | None = Field(default=None)
 
     allowed_origins: Annotated[list[str], NoDecode] = Field(default_factory=lambda: [_WILDCARD])
@@ -107,10 +106,7 @@ class Settings(BaseSettings):
 
     @property
     def docs_are_enabled(self) -> bool:
-        """Return whether OpenAPI/docs routes should be mounted.
-
-        Production defaults to disabled so an unconfigured deployment does not publish its schema; `DOCS_ENABLED` overrides in either direction.
-        """
+        """Return whether OpenAPI/docs routes should be mounted."""
         if self.docs_enabled is not None:
             return self.docs_enabled
         return not self.environment.is_production
@@ -119,7 +115,7 @@ class Settings(BaseSettings):
     def _reject_wildcard_with_credentials(self) -> Self:
         """Fail closed: credentialed CORS must not be combined with wildcard origins.
 
-        Starlette silently reflects the request origin when `allow_origins=["*"]` and `allow_credentials=True`, effectively allowing any site to send credentialed requests. Reject that combination at startup instead.
+        Starlette would silently reflect the request's own origin instead (backend/middleware).
         """
         if self.allow_credentials and _WILDCARD in self.allowed_origins:
             raise ValueError(
@@ -132,7 +128,8 @@ class Settings(BaseSettings):
     def _enforce_production_hardening(self) -> Self:
         """Fail closed: refuse to boot a production app that still holds template defaults.
 
-        Each of these is safe locally and unsafe in production, and every one of them is easy to forget. Raising here turns a silent misconfiguration into a startup failure with a precise message.
+        New "safe locally, unsafe in prod" defaults belong here, not in a comment
+        (backend/settings-config).
         """
         if not self.environment.is_production:
             return self

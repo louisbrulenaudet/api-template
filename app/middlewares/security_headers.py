@@ -5,8 +5,7 @@ __all__ = [
     "SecurityHeadersMiddleware",
 ]
 
-# Starlette ships no security-headers middleware, so this is a deliberate local one.
-# Values chosen to be safe for a JSON API: no framing, no MIME sniffing, no referrer leakage.
+# Starlette ships none of these; the values are chosen to be safe for a JSON API.
 _BASE_HEADERS: tuple[tuple[str, str], ...] = (
     ("x-content-type-options", "nosniff"),
     ("referrer-policy", "no-referrer"),
@@ -22,16 +21,11 @@ _HSTS_HEADER = ("strict-transport-security", "max-age=63072000; includeSubDomain
 class SecurityHeadersMiddleware:
     """Pure-ASGI middleware adding conservative security response headers.
 
-    Pure ASGI rather than `BaseHTTPMiddleware`, matching `RequestIDMiddleware` and current Starlette guidance: it avoids the `contextvars` propagation limits of the base class and adds no per-request task overhead.
+    Pure ASGI rather than `BaseHTTPMiddleware`, matching `RequestIDMiddleware` (backend/middleware).
     """
 
     def __init__(self, app: ASGIApp, *, hsts: bool = False) -> None:
-        """Store the wrapped app and precompute the header tuple.
-
-        Args:
-            app: The ASGI application to wrap.
-            hsts: Whether to also send `Strict-Transport-Security`. Enable only behind TLS.
-        """
+        """Store the wrapped app and precompute the header tuple. Enable `hsts` only behind TLS."""
         self.app = app
         self.headers = (*_BASE_HEADERS, _HSTS_HEADER) if hsts else _BASE_HEADERS
 
@@ -45,8 +39,7 @@ class SecurityHeadersMiddleware:
             if message["type"] == "http.response.start":
                 headers = MutableHeaders(scope=message)
                 for key, value in self.headers:
-                    # `setdefault`, not assignment: a route that deliberately sets its own
-                    # policy (e.g. a permissive CSP for the docs page) must win.
+                    # `setdefault`, not assignment, so a route may override a header.
                     headers.setdefault(key, value)
             await send(message)
 

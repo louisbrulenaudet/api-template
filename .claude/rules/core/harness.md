@@ -1,0 +1,76 @@
+---
+paths:
+  - ".claude/**"
+  - ".cursor/**"
+  - ".mcp.json"
+  - ".worktreeinclude"
+  - ".gitignore"
+  - ".cursorignore"
+  - ".cursorindexingignore"
+---
+
+# Agent Harness
+
+Covers the mechanics that decide whether a change to the harness actually has the effect it looks like it has - the parts where the config lies to you if you read it literally. The Claude copy is path-scoped to the harness directories because Claude only needs it while editing them; the Cursor copy is `alwaysApply: true` because the context-path table below is Cursor-facing and Cursor cannot path-scope on it usefully. `hooks/**` is deliberately outside both: `hooks/AGENTS.md` + `hooks/CLAUDE.md` already load on demand for that directory and own the hook contract.
+
+| Tool | Entry | Path rules | Hooks / MCP | Shared scripts |
+|------|-------|------------|-------------|----------------|
+| Cursor | `AGENTS.md` | `.cursor/rules/**/*.mdc` | `.cursor/hooks.json`, `.cursor/mcp.json` (Context7) | `hooks/` |
+| Claude Code | `CLAUDE.md` → `@AGENTS.md` | `.claude/rules/**/*.md` | `.claude/settings.json`, `.mcp.json` (Context7) | `hooks/` |
+
+Slash review prompts: `.cursor/commands/` and `.claude/commands/` (`review-architecture`, `review-code-quality`, `review-configuration`, `review-performance`). Skills: `.cursor/skills/` and `.claude/skills/`.
+
+**Markdown, rule and hook script filenames are `kebab-case`.** Stated here rather than in `quality/python-style.md`, whose globs are `app/**/*.py` and `tests/**/*.py` - it could never fire while you were creating one of these files.
+
+## Rules are a dual tree
+
+Every `.claude/rules/**/*.md` has a `.cursor/rules/**/*.mdc` twin at the same relative path, with the same intent.
+
+The frontmatter dialects differ and do not transfer:
+
+- **Cursor:** `description:` + `globs:` (one comma-joined string, not a list) + `alwaysApply:`. The `description:` is how Cursor decides to load the rule, so it is load-bearing, not boilerplate.
+- **Claude Code:** `paths:` only, as a YAML list of quoted globs. A rule with **no** `paths:` is loaded at launch, unconditionally - [`guardrails.md`](guardrails.md) is the only one, deliberately. Path-scoped rules trigger when Claude **reads** a matching file, and are **not** re-injected after `/compact`; they reload on the next matching read.
+
+Two consequences that follow from Claude's load model rather than from taste, and that constrain both trees because the content is shared. **A file dropped under `.claude/rules/` without `paths:` frontmatter is an always-on rule**, so deferred reference material must live somewhere else - a skill's `references/` directory, never there. And **when one invariant governs two globs, duplicate it into both rules rather than cross-referencing**: post-compact, the rule that holds the original does not reload just because a file the other one covers was opened.
+
+Body-content conventions the twins share: internal rule references are relative markdown links in `.claude` (`[middleware.md](middleware.md)`) and plain backticked slugs in `.cursor` (`backend/middleware`); external links are kept verbatim in both.
+
+## Subagent roster
+
+| Agent | Both trees? | Grant | Purpose |
+|---|---|---|---|
+| `ci-verifier` | yes | shell, read-only by instruction | Ruff + ty gate, non-mutating forms only |
+| `test-runner` | yes | shell, read-only by instruction | narrowest pytest run, failures only |
+| `docs-researcher` | yes | web + Context7 only | external docs, cited |
+| `code-reviewer` | yes | read-only, **no shell** | diff vs `rules/` conformance |
+| `security-reviewer` | yes | read-only, **no shell** | secrets, fail-open config, legal-data handling |
+| `refactorer` | **Claude only** | edit, in a git worktree | repo-wide mechanical refactors |
+| `db-reader` | **Claude only**, denied | specific MCP read tools | read-only SQL pattern; inert until a DB exists |
+
+The last two are deliberately **not** mirrored to Cursor: `refactorer`'s safety is `isolation: worktree` and `db-reader`'s is a frontmatter `PreToolUse` guard, and neither mechanism has a verified Cursor equivalent. Mirroring them on name and description alone would ship the capability without the control.
+
+Agent frontmatter dialects also differ: Cursor agents take `name`, `description`, `readonly`, `model`; Claude agents take `tools`, `disallowedTools`, `model`, `permissionMode`, `maxTurns`, `skills`, `mcpServers`, `hooks`, `memory`, `background`, `effort`, `isolation`, `color`, `initialPrompt`. Port the intent, never copy the block.
+
+**Claude subagent privilege comes from `tools` only.** **Nothing enforces this:** `permissionMode` in agent frontmatter is inert in this repo, because the project `defaultMode` is `acceptEdits` and a subagent cannot tighten below its parent's mode - so an agent whose safety rests on it looks constrained and is not. Read-only means an omitted `Bash` and an omitted `Edit`, nothing else. Conversation history, output style and auto memory do not reach a non-fork subagent; `CLAUDE.md` and `.claude/rules/` do, except for the built-in `Explore` and `Plan` agents, which skip both. So a durable fact belongs in `AGENTS.md` or a rule, never only in a memory note.
+
+## Worktrees
+
+Claude Code only. `worktree.baseRef: "head"` branches from local `HEAD`, and `symlinkDirectories: [".venv"]` shares the main virtualenv - so never run `uv sync` / `make sync` inside a worktree.
+
+**`worktree.sparsePaths` is `.claude`, `app`, `tests`, `hooks`, `make` - it excludes `.cursor`, `.github`, `pyproject.toml` and `Dockerfile`.** **Nothing enforces this:** a worktree-isolated `refactorer` therefore cannot see or update the Cursor rule twins or the `.github/**` citations, so any dual-tree or CI-touching refactor it performs is silently half-applied and looks complete. Do that work in the main thread, or widen `sparsePaths` first.
+
+**Worktrees carry no `.env`.** `.worktreeinclude` omits it on purpose: a subagent worktree that made any change persists until a sweep older than `cleanupPeriodDays` (20), so a listed secret would sit in plaintext under `.claude/worktrees/` for weeks. Tests do not need it (`tests/conftest.py` uses `model_validate`); only `make dev` / `make prod` do - copy it in by hand for those.
+
+## Context path hygiene
+
+| Mechanism | Effect | Use for |
+|-----------|--------|---------|
+| `.cursorignore` | Blocks Agent, Tab, Inline Edit, `@` | Secrets + never-prompt paths (`.env`, keys, `.venv`, caches) |
+| `.cursorindexingignore` | Index only; AI can still open | Heavy/generated noise (`htmlcov/`, `uv.lock`, build artifacts) |
+| `.gitignore` | VCS + default Cursor index / Claude search | Standard ignore |
+| Claude `permissions.deny` `Read(...)` | Excludes from discovery, search, and reads | Same noise/secrets for Claude Code |
+| `.worktreeinclude` | Copies listed gitignored files into Claude worktrees | Nothing today - `.env` is deliberately **not** listed |
+
+Do not put index-only noise in `.cursorignore` - that over-blocks the Agent. When the concern is what ships in the **image** rather than what the agent reads, the file is `.dockerignore`, which does not consult `.gitignore` at all (`ops/dockerfile.md`). Optional Context7 API key stays in user MCP / local overlay - never commit it.
+
+**`permissions.deny` globs cannot express an exception.** Enumerate the paths you mean rather than reaching for a wildcard: `Read(**/.env.*)` would also match the committed `.env.template`, and no hook allowlist can loosen a deny rule. `Edit(path)` covers Write and NotebookEdit too; a `Write(path)` rule is accepted but never matched and warns at startup, so never write one.

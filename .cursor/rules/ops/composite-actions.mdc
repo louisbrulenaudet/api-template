@@ -1,0 +1,59 @@
+---
+description: Composite actions under .github/actions - shell: bash mandatory, env: not ${{ }}, the -eo pipefail fail-open trap, and the credential/digest/smoke gate internals
+globs: .github/actions/**
+alwaysApply: false
+---
+
+# Composite Actions
+
+Multi-line shell belongs in a local composite action under `.github/actions/<name>/action.yml`, not inline in a workflow. Three live here: `assert-no-baked-credentials`, `smoke-test-image`, `verify-base-digests`. Workflow-level concerns are in `ops/ci`.
+
+## Authoring
+
+- **Every `run` step must declare `shell: bash`** - there is no default in a composite action.
+- Referenced as `uses: ./.github/actions/<name>`, which therefore **requires `actions/checkout` first**.
+- **A value reaching shell must go through `env:` and be read as `"${VAR}"`.** `${{ inputs.x }}` written into a `run:` body is raw string substitution, so an attacker-influenceable value becomes code. `github.ref_name` is the standing example (`ops/ci`).
+- **`parallel:` cannot be used inside a composite action.** Check that before moving a step into one - it is a workflow-only construct.
+- **Every `uses:` here is pinned to a full-length commit SHA** with the tag in a trailing `# vX.Y.Z` comment, exactly as in a workflow (`ops/ci`).
+
+## The `-eo pipefail` trap
+
+**A composite action's `shell: bash` runs with `-eo pipefail`; a workflow `run:` step does not.** This is the single most dangerous difference between the two, because it makes a gate fail **open** rather than closed, and all three actions here are shaped around it.
+
+**Nothing enforces this:** both consequences below produce a *passing* step, not a failing one, so nothing in CI tells you the gate stopped working.
+
+- **Never `<producer> | grep -q` in a composite action.** `grep -q` exits on first match, so the producer can take SIGPIPE and set the pipeline status to 141, which reads as "no match" and lets a real finding through. `assert-no-baked-credentials` therefore captures `docker history` into a variable first and greps a here-string - which also means a *failing* `docker history` fails the step instead of being mistaken for a clean result.
+- **Any `grep` whose no-match case is legitimate needs `|| true`**, since exit 1 would otherwise abort with no explanation. `verify-base-digests` does that on its ref scan and then tests for emptiness explicitly, because "no pinned refs at all" is itself a finding and must never pass silently.
+
+## Why a CI-only gate lives here
+
+`verify-base-digests` is deliberately **not** a `make` target: it reaches a container registry on every invocation, so putting it on the local surface would add a network dependency to a developer's inner loop for a check that only matters when a `FROM` line changes. "Make and CI run the same commands" governs the shared gates (`ops/makefile`); it does not oblige a registry-bound assertion to masquerade as one.
+
+## `assert-no-baked-credentials`
+
+**The credential pattern is deliberately broader than this repo's own variable names.** `token` and `private[_-]?key` are matched standalone, not only as `tunnel_token` / `api_key`, because `CF_API_TOKEN`, `HF_TOKEN`, `GITHUB_TOKEN` and `PRIVATE_KEY` are the shapes most likely to be added later. The trailing `[=:][^ ]` is what keeps it off innocent substrings - `tokenizers==0.1` contains no `token=`. Widen the alternation when a new credential shape appears; **do not drop the assignment suffix.**
+
+It catches the shapes it knows, not every one - so it is a backstop, not a licence to put a secret near a build (`ops/dockerfile`).
+
+## `verify-base-digests`
+
+Asserts every `@sha256:` pin is a multi-arch index that covers `linux/amd64` **and** `linux/arm64`, reading the refs out of `Dockerfile` + `compose.yaml` so a newly pinned base is covered without touching the action. Never a hardcoded list, which would drift from the pins it guards.
+
+- It uses `--raw` and `jq`, not `--format`: the documented template fields are only `.Name`, `.Manifest` and `.Image`, so `.Manifest.MediaType` relies on struct internals, whereas the raw JSON is a contract - an index carries `manifests[]`, a single-platform manifest carries `config`/`layers`.
+- **Discriminate on the presence of `manifests[]`, never on `mediaType`.** `mediaType` is *optional* at the top level of an OCI index, so testing it alone would false-fail a compliant index that omits one and block CI on a correct pin. It is still worth reporting, as the useful diagnostic once something has already gone wrong.
+- Comparing `os`/`architecture` while **ignoring `variant`** is what lets `linux/arm64` match an image advertising `linux/arm64/v8`; attestation entries (`unknown/unknown`) are filtered out.
+- It deliberately does **not** check that a digest is the tag's *current* digest: that has to drift, because drifting is what makes Dependabot open a PR (`ops/dependabot`).
+- Finding **no pinned ref at all also fails**, which is how a base image quietly losing its digest gets caught.
+- It is the only CI step that touches a registry, and so the only one that can go red on an unrelated outage - accepted, because an architecture-specific digest builds fine on the amd64 runner and fails only on an arm64 contributor's machine. If it turns flaky, move it to a scheduled workflow rather than deleting it, and never "fix" it by dropping the digest pins it checks.
+
+## `smoke-test-image`
+
+**The smoke step is the gate, not the build.** An image that builds but cannot serve a request is not a passing build. It runs the image under `--read-only --cap-drop ALL --security-opt no-new-privileges`, polls `/api/v1/health`, and asserts UID 10001, `/docs` → 404 in production, and that `uv`, the `fastapi` CLI and `pip` are all absent from `runtime`.
+
+Since Compose no longer describes production (`ops/compose`), **these assertions are the only proof in this repo that the runtime hardening holds** - the rest moved to the k8s manifests. Weakening one silently removes that proof.
+
+- **The three absence checks deliberately share one preamble** - a `docker exec smoke python -c 'pass'` that proves exec works at all - because a failing `docker exec` is otherwise indistinguishable from "the thing is absent", and every one of those gates would fail open.
+- **The `pip` check addresses `/usr/local/bin/python3` by absolute path on purpose:** bare `python` is the venv, which never had pip, so probing it would assert nothing. This check is what stops the Dockerfile's version-hardcoded `rm -rf` paths from degrading into a silent no-op (`ops/dockerfile`).
+- It also **waits for Docker's own `HEALTHCHECK` to report `healthy`** - a separate assertion from the health poll on purpose, because an image whose own healthcheck disagrees with reality is unschedulable in production however well it answers curl.
+- It checks that a **non-probe path still answers 400 to an unlisted `Host`** - the pair that pins the probe exemption (`backend/middleware`) open at one end and shut at the other.
+- **Only probe paths may be curled without `-H "Host: ${ALLOWED_HOST}"`.** Production forbids a wildcard `ALLOWED_HOSTS`, so anything else gets a 400 before routing - and adding the header to the health poll would silently stop testing the exemption.

@@ -1,7 +1,6 @@
-# Allowlist approach: exclude everything by default, then re-include only what
-# the Dockerfile explicitly COPYs. Any file or directory added to the project
-# in the future is automatically kept out of the build context without further
-# changes to this file.
+# Allowlist: exclude everything, then re-include only what the Dockerfile COPYs, so a new `COPY <path>`
+# needs a matching `!<path>` here. The blanket guarantee stops at `!app/**` - hence the re-exclusions
+# below, which are the real protection (ops/dockerfile).
 *
 
 # builder stage - uv sync --frozen --no-dev
@@ -15,6 +14,11 @@
 # …but never ship host bytecode caches that slipped into the allowlisted app/ tree.
 app/**/__pycache__
 app/**/*.pyc
+
+app/**/.DS_Store
+app/**/._*
+app/**/.AppleDouble
+app/**/.Spotlight-V100
 
 # dotenv, in every naming convention
 app/**/.env

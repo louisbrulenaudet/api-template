@@ -17,19 +17,13 @@ _SECURE_RANDOM = secrets.SystemRandom()
 
 
 def _compute_retry_delay(sleep_time: int | float, attempt: int, max_delay: float = 30.0) -> float:
-    """Compute an attempt-based backoff delay with jitter.
-
-    Full-jitter (uniform in [0, min(base_delay, max_delay)]) reduces thundering herd impact when many requests retry concurrently after the same downstream failure.
-    """  # pragma: no cover
+    """Compute an attempt-based backoff delay with full jitter (quality/python-style)."""
     base_delay = min(float(sleep_time) * (2**attempt), max_delay)
     return _SECURE_RANDOM.uniform(0, base_delay)
 
 
 def _is_event_loop_running() -> bool:
-    """Return True when called from within an active asyncio event loop.
-
-    This is used to prevent the sync retry decorator from performing blocking   sleeps inside async contexts.
-    """  # pragma: no cover
+    """Return True when called from within an active asyncio event loop."""
     try:
         asyncio.get_running_loop()
     except RuntimeError:
@@ -45,8 +39,8 @@ def _should_stop(
 ) -> bool:
     """Return True when no further attempt should be made.
 
-    Deliberately independent of `raises_on_exception`: whether to keep trying and whether to re-raise are separate questions. Conflating them meant `raises_on_exception=False` silently ignored `non_retry_exceptions` and kept retrying an error marked as not worth retrying.
-    """  # pragma: no cover
+    Deliberately independent of `raises_on_exception` (quality/python-style).
+    """
     if non_retry_exceptions and isinstance(exc, non_retry_exceptions):
         return True
     return attempt >= max_retries - 1
@@ -58,23 +52,11 @@ def retry(
     raises_on_exception: bool = True,
     non_retry_exceptions: tuple[type[Exception], ...] = (),
 ) -> Callable[[Callable[P, R]], Callable[P, R | None]]:
-    """Decorator to retry a function call on exception.
-
-    Args:
-        max_retries (int): Maximum number of retries before giving up.
-        sleep_time (int | float): Time to sleep between retries.
-        raises_on_exception (bool): If True, re-raises the exception after max retries.
-        non_retry_exceptions (tuple[type[Exception], ...]): Exceptions that should not trigger a retry.
-
-    Returns:
-        Callable[[Callable[..., Any]], Callable[..., Any]]: Decorated function that retries on exception.
-    """
+    """Retry a sync function call on exception, with full-jitter backoff."""
 
     def decorator(func: Callable[P, R]) -> Callable[P, R | None]:
-        # `wraps` is required, not cosmetic: without it the wrapper exposes
-        # `(*args: P.args, **kwargs: P.kwargs)` and FastAPI rejects any decorated path operation
-        # with `FastAPIError: Invalid args for response field! ... check that P.args is a valid
-        # Pydantic field type`. It also restores __name__/__doc__/__wrapped__ for introspection.
+        # Required, not cosmetic - FastAPI rejects a decorated path operation without it
+        # (quality/python-style).
         @wraps(func)
         def wrapper(*args: P.args, **kwargs: P.kwargs) -> R | None:
             if _is_event_loop_running():
@@ -108,19 +90,10 @@ def async_retry(
     raises_on_exception: bool = True,
     non_retry_exceptions: tuple[type[Exception], ...] = (),
 ) -> Callable[[Callable[P, Awaitable[R]]], Callable[P, Awaitable[R | None]]]:
-    """Async decorator to retry a coroutine function call on exception.
-
-    Args:
-        max_retries (int): Maximum number of retries before giving up.
-        sleep_time (int | float): Time to sleep between retries.
-        raises_on_exception (bool): If True, re-raises the exception after max retries.
-        non_retry_exceptions (tuple[type[Exception], ...]): Exceptions that should not trigger a retry.
-
-    Returns:
-        Callable[[Callable[..., Any]], Callable[..., Any]]: Decorated async function that retries on exception.
-    """
+    """Retry a coroutine function call on exception, with full-jitter backoff."""
 
     def decorator(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R | None]]:
+        # Required, not cosmetic - see `retry` above (quality/python-style).
         @wraps(func)
         async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R | None:
             for i in range(max_retries):

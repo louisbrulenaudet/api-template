@@ -1,29 +1,27 @@
 ---
 paths:
   - "app/api/**/*.py"
+  - "app/core/security.py"
 ---
 
 # FastAPI Routes
 
-Handlers live under `app/api/`, mounted under `/api/v1`. Load the `fastapi` skill for current framework
-patterns.
+Handlers live under `app/api/`, mounted under `/api/v1`. Load the `fastapi` skill for current framework patterns.
 
 ## Template surface
 
-`GET /api/v1/ping` → `PingResponse` · `GET /api/v1/health` → `HealthResponse`. Both stay
-**unauthenticated** - Docker/K8s probes call them, so adding auth breaks container health checks. For the
-same reason they are listed in `PROBE_PATHS` and exempted from host validation and HTTPS redirection; see
-[middleware.md](middleware.md) before touching that list.
+`GET /api/v1/ping` → `PingResponse` · `GET /api/v1/health` → `HealthResponse`. Both stay **unauthenticated** - Docker/K8s probes call them, so adding auth breaks container health checks. For the same reason they are listed in `PROBE_PATHS` (`app/api/v1/router.py`) and exempted from host validation and HTTPS redirection.
 
-Protect a router with `APIRouter(dependencies=[Depends(require_api_key)])`
-(`app/core/security.py`) - per-router, not per-handler.
+**Nothing enforces this:** the exemption is safe only because those routes take no input and return a static payload, so **do not add a path to `PROBE_PATHS`** that reads request state, echoes anything, or builds a URL - such a path would be reachable with an unvalidated `Host` and over plain HTTP. Nothing in the type system or the test suite catches it. [middleware.md](middleware.md) has the full reasoning.
+
+Protect a router with `APIRouter(dependencies=[Depends(require_api_key)])` (`app/core/security.py`) - per-router, not per-handler.
+
+**The `APIKeyHeader` scheme sets `auto_error=False` deliberately.** With the default, a missing header makes FastAPI raise its own 403 carrying a `{"detail": ...}` body, which bypasses the uniform `ErrorResponse` envelope ([exceptions.md](exceptions.md)). Returning `None` instead lets `require_api_key` raise `AuthenticationError`, so a missing key and a wrong key look identical on the wire. The scheme is still published to OpenAPI, so Swagger UI keeps rendering the padlock and the "Authorize" box - that is what you would lose by dropping the dependency instead.
 
 ## Validation at the boundary
 
-- Validate **every** path, query and body input with Pydantic / FastAPI params - never a bare untyped value
-  on an API input.
-- Prefer `Annotated[..., Path()]`, `Annotated[..., Query()]`, `Annotated[..., Body()]` (or a dedicated
-  request model) with constraints and descriptions.
+- Validate **every** path, query and body input with Pydantic / FastAPI params - never a bare untyped value on an API input.
+- Prefer `Annotated[..., Path()]`, `Annotated[..., Query()]`, `Annotated[..., Body()]` (or a dedicated request model) with constraints and descriptions.
 - Declare return types and/or `response_model=` so OpenAPI stays accurate.
 
 ```python
@@ -44,12 +42,12 @@ async def list_items(
 3. Call service logic - see [services.md](services.md) for what belongs there.
 4. Return a DTO.
 
-Prefer `async def` for I/O and never block the event loop: one synchronous call in an `async` handler stalls
-every concurrent request, not just its own.
+Prefer `async def` for I/O and never block the event loop: one synchronous call in an `async` handler stalls every concurrent request, not just its own. **Use `async def` even for a trivial body** - FastAPI runs a `def` handler in a threadpool, so a handler that only builds a DTO pays a thread hop for nothing.
+
+Do not repeat a route's `description=` in its docstring. When `description=` is set FastAPI ignores the docstring entirely, so the two silently drift and only one of them is ever served.
 
 ## Errors
 
-Raise `CoreError` subclasses and let the global handler map the status code; see
-[exceptions.md](exceptions.md) for the envelope and for what may appear in `details`.
+Raise `CoreError` subclasses and let the global handler map the status code; see [exceptions.md](exceptions.md) for the envelope and for what may appear in `details`.
 
 RESTful paths: plural nouns, verbs expressed by HTTP method.

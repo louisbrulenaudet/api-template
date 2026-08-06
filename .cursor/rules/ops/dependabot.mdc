@@ -1,0 +1,18 @@
+---
+description: Dependabot config - four ecosystems, grouped PRs, why the docker ecosystems are load-bearing, cooldown/labels/dependency-type traps
+globs: .github/dependabot.yml
+alwaysApply: false
+---
+
+# Dependabot
+
+`.github/dependabot.yml` declares four ecosystems: `uv`, `github-actions`, `docker`, `docker-compose`. Full option reference: [Dependabot options](https://docs.github.com/code-security/dependabot/working-with-dependabot/dependabot-options-reference).
+
+**The two Docker ecosystems are load-bearing, not housekeeping.** Base images are pinned by tag *and* `@sha256:` digest (`ops/dockerfile`), and a digest is immutable - so nothing else in this repo will ever move a pinned base off a CVE. Dropping either ecosystem silently freezes the base images at whatever digest they were last pinned to.
+
+- **Every ecosystem groups its updates into one PR.** Not only about review volume: `uses:` refs are pinned by commit SHA, so ungrouped bumps arrive as a steady stream of one-line diffs.
+- **`cooldown` is deliberately absent.** It already defaults to 3 days - useful supply-chain latency, since a compromised release is often yanked inside that window - and it applies to version updates only, never to security updates.
+- **`labels` is deliberately absent.** Dependabot applies its own `dependencies` label, and any label named here that does not already exist in the repository is **silently ignored rather than created**. Add one only after creating it, or the config lies about what it does.
+- **No runtime/dev split via a group `dependency-type`.** That key is supported only for bundler, composer, mix, maven, npm and pip - *not* `uv` - so adding it makes the whole config invalid. `commit-message.prefix-development` **is** supported for `uv`, and that is what distinguishes a dev-tool bump from a shipped one.
+- **A `uv` bump in the `docker` ecosystem moves only one of that pin's three homes.** **Nothing enforces this:** `setup-uv`'s `version:` input and `[tool.uv] required-version` are manual (`quality/uv-dependencies`), so a partial bump leaves three disagreeing versions and no check notices. Bump all three in the same PR. Dependabot also moves tag and digest together but never verifies the new digest is a multi-arch index; `.github/actions/verify-base-digests` is what enforces that on the PR (`ops/composite-actions`).
+- **`requirements.txt` has to be re-exported after every merged Python bump** (`quality/uv-dependencies`), because that export - not `uv.lock` - is what GitHub's dependency graph reads. CI's `check-requirements` gate fails the next PR if it was forgotten.

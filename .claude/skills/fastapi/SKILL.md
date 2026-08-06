@@ -5,9 +5,7 @@ description: FastAPI best practices for this api-template. Use when writing or r
 
 # FastAPI (project skill)
 
-Best-practice FastAPI patterns for this api-template. Pair with `.claude/rules/backend/fastapi-routes.md`
-(path-scoped route rules) and the `pydantic-best-practices` skill for models. The Cursor twin lives at
-`.cursor/skills/fastapi/SKILL.md` - keep the two in sync when updating either.
+Best-practice FastAPI patterns for this api-template. Pair with `.claude/rules/backend/fastapi-routes.md` (path-scoped route rules) and the `pydantic-best-practices` skill for models. The Cursor twin lives at `.cursor/skills/fastapi/SKILL.md` - keep the two in sync when updating either.
 
 ## Essentials for this repo
 
@@ -32,6 +30,8 @@ Run the production server:
 ```bash
 fastapi run
 ```
+
+**Not in this repo, though.** `fastapi-cli` sits in the `devserver` dependency group here, never in `[project] dependencies`, so it is absent from the Docker `runtime` image: production runs `uvicorn app.main:app` directly, and `make prod` runs the same command locally (bound to loopback rather than `0.0.0.0` - see the comment on that target). Use `fastapi dev` / `make dev` for local development and leave `fastapi run` alone. See `quality/python-tooling`.
 
 ### Add an entrypoint in `pyproject.toml`
 
