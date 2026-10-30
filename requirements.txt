@@ -13,7 +13,7 @@ anyio==4.14.2
     #   watchfiles
 brotli==1.2.0 ; platform_python_implementation == 'CPython'
     # via httpx2
-brotlicffi==1.2.0.1 ; platform_python_implementation != 'CPython'
+brotlicffi==1.2.1.0 ; platform_python_implementation != 'CPython'
     # via httpx2
 cffi==2.1.0 ; platform_python_implementation != 'CPython'
     # via brotlicffi
